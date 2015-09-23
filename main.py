@@ -4,8 +4,27 @@ import socket
 import subprocess
 import os
 
-gwip = '10.8.10.251'
+Gateway = '10.8.10.251'
 
+Link_Static_Route = (["ip route 10.8.100.0 255.255.252.0 10.8.10.241 name TO-SZ-Shajin",    "深圳-沙井"],
+                     ["ip route 10.12.0.0 255.255.252.0 10.8.10.241 name TO-Xinxiang",      "新乡"],
+                     ["ip route 10.13.1.0 255.255.255.0 10.8.10.241 name TO-Foshan-WH",     "佛山运作"],
+                     ["ip route 10.13.3.0 255.255.255.0 10.8.10.241 name TO-Foshan-OFFICE", "佛山办公室"],
+                     ["ip route 10.16.0.0 255.255.252.0 10.8.10.242 name TO-Shanghai",      "上海"],
+                     ["ip route 10.17.0.0 255.255.252.0 10.8.10.242 name TO-Beijing",       "北京"],
+                     ["ip route 10.127.0.0 255.255.252.0 10.8.10.242 name TO-HK",           "香港"],
+                     ["ip route 10.69.1.0 255.255.255.0 10.8.10.242 name TO-XM-Yuanchu",    "厦门 元初"],
+                     ["ip route 10.68.0.0 255.255.252.0 10.0.0.6 name TO-XM-Fibre-4M",      "厦门办公专线"],
+                     ["ip route 172.18.0.0 255.255.0.0 10.0.0.6 name TO-XM-LenovoLAN"       "厦门联想专线"])
+
+Application_Static_Route = ("ip route 103.30.232.33 255.255.255.255 10.8.10.242 name For-IPG",
+                            "ip route 202.14.67.0 255.255.255.0 10.8.10.242 name For-DNS-PACnet",
+                            "ip route 202.96.27.0 255.255.255.0 10.8.10.242 name For-LENOVO-INTERFACE-BACKUP",
+                            "ip route 203.247.130.80 255.255.255.255 10.8.10.241 name For-LG-CHEM",
+                            "ip route 216.228.121.21 255.255.255.255 10.8.10.242 name For-NVIDIA",
+                            "ip route 219.134.185.204 255.255.255.255 10.8.10.242 name For-IE-Penghaiyun",
+                            "ip route 219.141.216.0 255.255.255.0 10.8.10.241 name For-LENOVO-INTERFACE"
+                            )
 
 def route(gwip):                            #检测网关通路 连接到目标， 成功则返回show run
     #log = dict([('show run', showrun)])
@@ -15,7 +34,7 @@ def route(gwip):                            #检测网关通路 连接到目标�
         print('无法连接到网关，请检查你的本地网络或断开本机已连接的VPN再试，仍然失败请联系开发者')
         return False, None, None
     else:
-        switch = ciscolib.Device(gwip, "ishsz")
+        switch = ciscolib.Device(gwip, "xxxxx")
         try:
             switch.connect()
             if switch.connected == True:
@@ -41,7 +60,7 @@ def route(gwip):                            #检测网关通路 连接到目标�
             return False, None, None
         else:
             try:
-                switch.enable("ishsz2008")
+                switch.enable("xxxxxx")
             except ciscolib.errors.CiscoError:
                 print(r"I tried to enable, but didn't get a command nor a password prompt")
                 return False, None, None
