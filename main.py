@@ -113,7 +113,7 @@ def menu(cycle):
         else:
             print('没有这个选项!\n')
 
-def Line_Detction(line ,*args):                                             #检测当前所在线路
+def Line_Detction(line, *args):                                             #检测当前所在线路
     for group in args:
         for line in group:
             if line[0] in sh_run:
