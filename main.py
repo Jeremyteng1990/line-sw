@@ -5,17 +5,17 @@ import subprocess
 import os
 
 Gateway = '10.8.10.250'
-VPN_Link = ('10.8.10.241', '10.8.10.242')
-Link_Static_Route = (["ip route 10.8.100.0 255.255.252.0", "name TO-SZ-Shajin",    "深圳-沙井"],
-                     ["ip route 10.12.0.0 255.255.252.0", "name TO-Xinxiang",      "新乡"],
-                     ["ip route 10.13.1.0 255.255.255.0", "name TO-Foshan-WH",     "佛山运作"],
-                     ["ip route 10.13.3.0 255.255.255.0", "name TO-Foshan-OFFICE", "佛山办公室"],
-                     ["ip route 10.16.0.0 255.255.252.0", "name TO-Shanghai",      "上海"],
-                     ["ip route 10.17.0.0 255.255.252.0", "name TO-Beijing",       "北京"],
-                     ["ip route 10.127.0.0 255.255.252.0", "name TO-HK",           "香港"],
-                     ["ip route 10.69.1.0 255.255.255.0", "name TO-XM-Yuanchu",    "厦门 元初"],
-                     ["ip route 10.68.0.0 255.255.252.0", "name TO-XM-Fibre-4M",   "厦门办公专线"],
-                     ["ip route 172.18.0.0 255.255.0.0", "name TO-XM-LenovoLAN"    "厦门联想专线"])
+VPN_Link = ('10.8.10.241', '10.8.10.242', '10.8.10.238', '10.0.0.6')
+Link_Static_Route = (["ip route 10.8.100.0 255.255.252.0", "name TO-SZ-Shajin",],
+                     ["ip route 10.12.0.0 255.255.252.0", "name TO-Xinxiang"],
+                     ["ip route 10.13.1.0 255.255.255.0", "name TO-Foshan-WH"],
+                     ["ip route 10.13.3.0 255.255.255.0", "name TO-Foshan-OFFICE"],
+                     ["ip route 10.16.0.0 255.255.252.0", "name TO-Shanghai"],
+                     ["ip route 10.17.0.0 255.255.252.0", "name TO-Beijing"],
+                     ["ip route 10.127.0.0 255.255.252.0", "name TO-HK"],
+                     ["ip route 10.69.1.0 255.255.255.0", "name TO-XM-Yuanchu"],
+                     ["ip route 10.68.0.0 255.255.252.0", "name TO-XM-Fibre-4M"],
+                     ["ip route 172.18.0.0 255.255.0.0", "name TO-XM-LenovoLAN"])
 
 Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name For-IPG"],
                             ["ip route 202.14.67.0 255.255.255.0",      "name For-DNS-PACnet"],
@@ -27,65 +27,73 @@ Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name Fo
                             )
 
 def Login_Route(gwip):                            #检测网关通路 连接到目标， 成功则返回show run
-
+    link = True
     ping = subprocess.call("ping -n 3 -w 1 %s" % gwip, shell=True,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if ping == 1:
         print('无法连接到网关，请检查你的本地网络或断开本机已连接的VPN再试，仍然失败请联系开发者')
-        return False, None, None
+        link = False
     else:
         switch = ciscolib.Device(gwip, "ishsz")
         try:
             switch.connect()
-            if switch.connected == True:
+            if switch.connected is True:
                 print('成功连接到网关！')
             else:
                 print('网关连接失败！')
-                return False, None, None
+                link = False
         except ciscolib.errors.AuthenticationError:
             print('连接认证失败！请与管理员联系')
-            return False, None, None
+            link = False
         except OSError:
             print('无法连接到网关，可能是管理员的安全策略导致的')
-            return False, None, None
+            link = False
         except socket.timeout:
             print("登录超时")
-            return False, None, None
+            link = False
         except AttributeError:
-            print(r"内部错误，初始化失败，软件即将退出! error code: 'NoneType' object has no attribute 'group'")
-            return False, None, None
+            print(r"内部错误，初始化失败! error code: 'NoneType' object has no attribute 'group'")
+            link = False
         except ciscolib.errors.CiscoError:
-            print('内部错误，初始化失败，软件即将退出!' +
+            print('内部错误，初始化失败!' +
                   '\nciscolib.errors.CiscoError: Unable to get device hostname')
-            return False, None, None
+            link = False
         else:
             try:
                 switch.enable("ishsz2008")
             except ciscolib.errors.CiscoError:
                 print(r"I tried to enable, but didn't get a command nor a password prompt")
-                return False, None, None
-            showrun = str((switch.cmd("show run")))
-            switch.cmd('conf t')
-            if showrun != None:
-                print('成功登录特权模式')
-                return True, showrun, switch
+                link = False
             else:
-                print('连接网关失败，原因未知！请与管理员联系')
-                return False, None, None
+                showrun = str((switch.cmd("show run")))
+                switch.cmd('conf t')
+                if showrun:
+                    print('系统初始化完成!\n')
+                    return showrun, switch
+                else:
+                    print('连接网关失败，原因未知！请与管理员联系')
+                    link = False
+    if link is False:
+        print('\n软件即将退出!')
+        exit()
+        os.system('pause')
 
 def Detect_Localip():
+    link = True
     try:
         ip = socket.gethostbyname(socket.gethostname())
     except:
         print('本机IP获取失败，可能是系统IP协议栈错误')
-        return False, None
+        link = False
     else:
         if '192.168.5' in ip or '10.8.' in ip:
-            return True, ip
+            return ip
         else:
             print('您的主机没有被授权使用本软件！\n即将退出！\n如已连接VPN请先断开.')
-            os.system('pause')
-            return False, None
+            link = False
+    if link is False:
+        os.system('pause')
+        exit()
 
 def hello():
     print('正在初始化*********************************************************************')
@@ -97,8 +105,8 @@ def menu(cycle):
     print('*******************************************************************************')             #输出菜单并定义功能值
     print('----------------------------------功能选择菜单---------------------------------')
     print('-------------------------------------------------------------------------------')
-    print('---------------------------------①检测各VPN所在线路---------------------------')
-    print('---------------------------------②开始切换VPN线路......-----------------------')
+    print('---------------------------------①查看当前链路状态----------------------------')
+    print('---------------------------------②开始切换VPN/App线路...----------------------')
     print('---------------------------------③查看当前定义--------------------------------')
     print('---------------------------------④使用说明------------------------------------')
     print('---------------------------------⑤退出----------------------------------------')
@@ -113,16 +121,20 @@ def menu(cycle):
         else:
             print('没有这个选项!\n')
 
-def Line_Detction(line, *args):                                             #检测当前所在线路
+def Line_Detction(*args):
+    #检测当前所在线路
+    Line_result = []
     for group in args:
         for line in group:
             if line[0] in sh_run:
                 a = sh_run.index(line[0]) + len(line[0]) + 1
                 b = a + sh_run[a:].index(' ' or '\n')
                 c = sh_run[a:b]
+                Line_result.append([line[-1], c, line[0]])
             else:
-                pass
-    pass
+                Line_result.append([line[-1], None, line[0]])
+    return Line_result
+
 
 def read():
     print("本工具用于给指定用户切换maps网络线路使用，"
@@ -216,14 +228,10 @@ def exitsw():
 if __name__ == '__main__':
     cycle = 0
     hello()
-    Detect_Localip_Determination, Host_ip = Detect_Localip()                       #检测IP并返回IP值
-    if Detect_Localip_Determination == False:
-        pass
-    while True:
-        switch_line_re = 0
-        Login_Route_Determination, sh_run, switch_config_t = Login_Route(Gateway)        #登录路由并返回showrun文本以及switch函数
-        if Login_Route_Determination == False:
-            os.system('pause')
-            exit()
-        print('系统初始化完成!')
-        line = Line_Detction(VPN_Link , Link_Static_Route, Application_Static_Route)                  #检测线路并返回检测结果
+    Host_ip = Detect_Localip()                                                  #检测IP并返回IP值
+    sh_run, switch_config_t = Login_Route(Gateway)                              #登录路由并返回showrun文本以及switch函数
+    line = Line_Detction(Link_Static_Route, Application_Static_Route)           #检测线路并返回检测结果
+    for x in line:
+        print("%-35s链接接口为%15s" % (x[0], x[1]))
+        print('-' * 60)
+
