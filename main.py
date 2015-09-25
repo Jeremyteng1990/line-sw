@@ -5,7 +5,7 @@ import subprocess
 import os
 
 Gateway = '10.8.10.250'
-VPN_Link = ('10.8.10.241', '10.8.10.242', '10.8.10.238', '10.0.0.6')
+VPN_Link = ['10.8.10.241', '10.8.10.242', '10.0.0.6']
 Link_Static_Route = (["ip route 10.8.100.0 255.255.252.0", "name TO-SZ-Shajin",],
                      ["ip route 10.12.0.0 255.255.252.0", "name TO-Xinxiang"],
                      ["ip route 10.13.1.0 255.255.255.0", "name TO-Foshan-WH"],
@@ -122,104 +122,67 @@ def menu(cycle):
             print('没有这个选项!\n')
 
 def Line_Detction(*args):
-    #检测当前所在线路
-    Line_result = []
+    # 检测当前所在线路
+    Vpn_result = []
+    App_result = []
+    x = True                    # 二次迭代为application
     for group in args:
         for line in group:
             if line[0] in sh_run:
                 a = sh_run.index(line[0]) + len(line[0]) + 1
                 b = a + sh_run[a:].index(' ' or '\n')
                 c = sh_run[a:b]
-                Line_result.append([line[-1], c, line[0]])
+                # [name,gw,ip route]
+                if x:
+                    Vpn_result.append([line[0], c, line[-1]])
+                else:
+                    App_result.append([line[0], c, line[-1]])
             else:
-                Line_result.append([line[-1], None, line[0]])
-    return Line_result
+                if x:
+                    Vpn_result.append([line[0], None, line[-1]])
+                else:
+                    App_result.append([line[0], None, line[-1]])
+        x = False
+    return [Vpn_result, App_result]
 
 
 def read():
     print("本工具用于给指定用户切换maps网络线路使用，"
           "请勿滥用作为其他用途\n如遇到bug请截图并发送到it_yangsy@ish.com.cn. 谢谢！\nversion: beta 0.2")
 
-def switch_line(line):
-    errnum = 0
-    b = 0
-    if line == 0:
-        while True:
-            line_select = input("\n本机目前处于非专用线路，" +
-                            "目前有两条专用线路(1 or 2)\n请一条选择要加入的网络线路(输入1或者2)：")
-            if line_select == '1':
-                print("\n你选择的是线路%s" % line_select)
-                print('\n正在处理中.............................\n.' +
-                  '.......................................\n' * 4)
-                switch.cmd('ip access-list extended source-acl-10.242')
-                switch.cmd(('permit ip host %s any') % ip)
-                print('现已成功加入专用线路 %s' % line_select)
-                break
-            elif line_select == '2':
-                print("\n你选择的是线路%s" % line_select)
-                print('\n正在处理中.............................\n.' +
-                  '.......................................\n' * 4)
-                switch.cmd('ip access-list extended source-acl-10.239')
-                switch.cmd(('permit ip host %s any') % ip)
-                print('\n现已成功加入专用线路 %s' % line_select)
-                break
+def Link_Group(line_status):
+    # readme = [[vpn], [app]]
+    line_241 = [[], []]
+    line_242 = [[], []]
+    line_XM = [[], []]
+    for group in line_status:
+        for line in group:
+            if line[1] == VPN_Link[0]:
+                line_241[line_status.index(group)].append([line[0], line[-1]])
+            elif line[1] == VPN_Link[1]:
+                line_242[line_status.index(group)].append([line[0], line[-1]])
+            elif line[1] == VPN_Link[2]:
+                line_XM[line_status.index(group)].append([line[0], line[-1]])
             else:
-                errnum += 1
-                if errnum < 3:
-                    print("\n输入错误 没有这个选项，从新输入!")
-                elif errnum < 4:
-                    print("\n你再故意输错我就要爆炸了(〃＞皿＜)")
-                else:
-                    print('(╯°口°)╯(┴—┴')
-                    os._exit(0)
-    else:
-        while True:
-            a = input("在两条专线间切换输入1，要切换到普通上网线路输入2 ：")
-            if a == '1' or a == '2':
-                if a == '2':
-                    b = 1
+                print('%s 当前不存在！' % line[0])
+    return line_241, line_242, line_XM
+
+def Link_Switching(options, *args):
+    cmd = [[], []]
+
+    if options == '1Y' or options == '1N':          # 全体切换到241
+        xm = True
+        if options == '1Y':
+            xm = False
+        for gw in args[1:]:
+            for group in gw:
+                for line in group:
+                    cmd[0].append('no ' + line[0] + ' ' + VPN_Link[args.index(gw)])
+                    cmd[1].append(line[0] + ' ' + '10.8.10.241' + ' ' + line[-1])
+            if xm:
                 break
-            else:
-                print('没有这个选项，请重新输入')
-                a = input("在两条专线间切换输入1，要切换到普通上网线路输入2")
-        print('\n正在处理中.............................\n.' +
-             '.......................................\n' * 4)
-        if line == 1:
-            switch.cmd('ip access-list extended source-acl-10.242')
-            switch.cmd(('no permit ip host %s any') % ip)
-            switch.cmd('exit')
-            if b == 1:
-                return 1
-            switch.cmd('ip access-list extended source-acl-10.239')
-            switch.cmd(('permit ip host %s any') % ip)
-            print("\n本机网络链路已从线路 1 切换到线路 2\n")
-        elif line == 11:
-            switch.cmd('ip access-list extended source-acl-10.242')
-            switch.cmd(('no permit ip host %s any') % ip)
-            switch.cmd('exit')
-            if b == 1:
-                return 1
-            switch.cmd('ip access-list extended source-acl-10.239')
-            switch.cmd(('permit ip host %s any') % ip)
-            print("\n本机网络链路已从线路 1 切换到线路 2\n")
-        if line == 2:
-            switch.cmd('ip access-list extended source-acl-10.239')
-            switch.cmd(('no permit ip host %s any') % ip)
-            switch.cmd('exit')
-            if b == 1:
-                return 1
-            switch.cmd('ip access-list extended source-acl-10.242')
-            switch.cmd(('permit ip host %s any') % ip)
-            print('本机网络链路已从线路 2 切换到线路 1\n')
-        elif line == 22:
-            switch.cmd('ip access-list extended source-acl-10.239')
-            switch.cmd(('no permit ip host %s any') % ip)
-            switch.cmd('exit')
-            if b == 1:
-                return 1
-            switch.cmd('ip access-list extended source-acl-10.242')
-            switch.cmd(('permit ip host %s any') % ip)
-            print('本机网络链路已从线路 2 切换到线路 1\n')
+    print('\n你的操作将执行以下命令:')
+    return cmd
 
 def exitsw():
     switch_config_t.cmd('end')
@@ -228,10 +191,15 @@ def exitsw():
 if __name__ == '__main__':
     cycle = 0
     hello()
-    Host_ip = Detect_Localip()                                                  #检测IP并返回IP值
-    sh_run, switch_config_t = Login_Route(Gateway)                              #登录路由并返回showrun文本以及switch函数
-    line = Line_Detction(Link_Static_Route, Application_Static_Route)           #检测线路并返回检测结果
-    for x in line:
-        print("%-35s链接接口为%15s" % (x[0], x[1]))
-        print('-' * 60)
+    Host_ip = Detect_Localip()                                                          # 检测IP并返回IP值
+    sh_run, switch_config_t = Login_Route(Gateway)                                      # 登录路由并返回showrun文本以及switch函数
+    Line_Status = Line_Detction(Link_Static_Route, Application_Static_Route)            # 检测线路并返回检测结果
+    for x in Line_Status:
+        for xx in x:
+            print("%-35s链路接口为%15s" % (xx[0][5:], xx[1]), '\n' + '-' * 60)
+    Line_241, Line_242, Line_XM = Link_Group(Line_Status)
+    cmd = Link_Switching('1Y', Line_241, Line_242, Line_XM)
+    for y in cmd:
+        for yy in y:
+            print(yy)
 
