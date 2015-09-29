@@ -26,7 +26,7 @@ Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name Fo
                             ["ip route 219.141.216.0 255.255.255.0",    "name For-LENOVO-INTERFACE"]
                             )
 
-def Login_Route(gwip):                            #检测网关通路 连接到目标， 成功则返回show run
+def Login_Route(gwip):                            # 检测网关通路 连接到目标， 成功则返回show run
     link = True
     ping = subprocess.call("ping -n 3 -w 1 %s" % gwip, shell=True,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -102,7 +102,7 @@ def hello():
 
 def menu(cycle):
     subprocess.call('cls', shell=True)
-    print('*******************************************************************************')             #输出菜单并定义功能值
+    print('*******************************************************************************')             # 输出菜单并定义功能值
     print('----------------------------------功能选择菜单---------------------------------')
     print('-------------------------------------------------------------------------------')
     print('---------------------------------①查看当前链路状态----------------------------')
@@ -112,7 +112,8 @@ def menu(cycle):
     print('---------------------------------⑤退出----------------------------------------')
     print('-------------------------------------------------------------------------------')
     print('*******************************************************************************')
-    if cycle >= 1: input('回车以继续...')
+    if cycle >= 1:
+        input('回车以继续...')
     while True:
         num = input('键入数字以选择功能:')
         if num in '12345' and len(num) == 1:
@@ -169,18 +170,47 @@ def Link_Group(line_status):
 
 def Link_Switching(options, *args):
     cmd = [[], []]
-
-    if options == '1Y' or options == '1N':          # 全体切换到241
+    a, b, c, d = options[0], options[1], options[2], options[3]
+    if d == 'Y':
+        xm = False
+    else:
         xm = True
-        if options == '1Y':
-            xm = False
-        for gw in args[1:]:
+
+    if a == '1':                                            # 全体切换到241/242
+        target_line = int(b) - 1
+        for gw in args:
+            if args.index(gw) == target_line:
+                continue
             for group in gw:
-                for line in group:
-                    cmd[0].append('no ' + line[0] + ' ' + VPN_Link[args.index(gw)])
-                    cmd[1].append(line[0] + ' ' + '10.8.10.241' + ' ' + line[-1])
+                for iproute in group:
+                    cmd[0].append('no ' + iproute[0] + ' ' + VPN_Link[args.index(gw)])
+                    cmd[1].append(iproute[0] + ' ' + VPN_Link[target_line] + ' ' + iproute[-1])
             if xm:
                 break
+    elif a == '2':                                          # vpn/app 切换到 241/242
+        sources_type = int(b) - 1
+        target_line = int(c) - 1
+        for gw in args:
+            if args.index(gw) == target_line:
+                continue
+            for group in gw[sources_type]:
+                cmd[0].append('no ' + group[0] + ' ' + VPN_Link[args.index(gw)])
+                cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
+            if d:
+                break
+    elif a == '3':
+        sources_line = int(b) - 1
+        sources_type = int(c)
+        if sources_type is 1 or sources_type is 2:
+            aa = sources_type - 1
+        else:
+            aa = 0
+        target_line = int(d) - 1
+        for gw in args[sources_line][aa:sources_type]:
+            for group in gw:
+                cmd[0].append('no ' + group[0] + ' ' + VPN_Link[sources_line])
+                cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
+
     print('\n你的操作将执行以下命令:')
     return cmd
 
@@ -196,9 +226,10 @@ if __name__ == '__main__':
     Line_Status = Line_Detction(Link_Static_Route, Application_Static_Route)            # 检测线路并返回检测结果
     for x in Line_Status:
         for xx in x:
-            print("%-35s链路接口为%15s" % (xx[0][5:], xx[1]), '\n' + '-' * 60)
+            print("%-35s链路接口为%15s" % (xx[-1][5:], xx[1]), '\n' + '-' * 60)
     Line_241, Line_242, Line_XM = Link_Group(Line_Status)
-    cmd = Link_Switching('1Y', Line_241, Line_242, Line_XM)
+    mune_result = ['3','2','3','1']
+    cmd = Link_Switching(mune_result, Line_241, Line_242, Line_XM)
     for y in cmd:
         for yy in y:
             print(yy)
