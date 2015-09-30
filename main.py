@@ -3,6 +3,9 @@ import ciscolib
 import socket
 import subprocess
 import os
+import tkinter
+import tkinter.messagebox as messagebox
+# import Gui
 
 Gateway = '10.8.10.250'
 VPN_Link = ['10.8.10.241', '10.8.10.242', '10.0.0.6']
@@ -170,14 +173,14 @@ def Link_Group(line_status):
 
 def Link_Switching(options, *args):
     cmd = [[], []]
-    a, b, c, d = options[0], options[1], options[2], options[3]
+    a, b, c, d = int(options[0]), int(options[1]), int(options[2]), int(options[3])
     if d == 'Y':
         xm = False
     else:
         xm = True
 
-    if a == '1':                                            # 全体切换到241/242
-        target_line = int(b) - 1
+    if a == 1:                                            # 全体切换到241/242
+        target_line = b - 1
         for gw in args:
             if args.index(gw) == target_line:
                 continue
@@ -187,9 +190,9 @@ def Link_Switching(options, *args):
                     cmd[1].append(iproute[0] + ' ' + VPN_Link[target_line] + ' ' + iproute[-1])
             if xm:
                 break
-    elif a == '2':                                          # vpn/app 切换到 241/242
-        sources_type = int(b) - 1
-        target_line = int(c) - 1
+    elif a == 2:                                          # vpn/app 切换到 241/242
+        sources_type = b - 1
+        target_line = c - 1
         for gw in args:
             if args.index(gw) == target_line:
                 continue
@@ -198,18 +201,22 @@ def Link_Switching(options, *args):
                 cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
             if d:
                 break
-    elif a == '3':
-        sources_line = int(b) - 1
-        sources_type = int(c)
-        if sources_type is 1 or sources_type is 2:
-            aa = sources_type - 1
+    elif a == 3:                                          # 位于X的Y切换到Z
+        sources_line = b - 1
+        if c is 1 or c is 2:
+            aa = c - 1
         else:
             aa = 0
-        target_line = int(d) - 1
-        for gw in args[sources_line][aa:sources_type]:
+        target_line = d - 1
+        for gw in args[sources_line][aa:c]:
             for group in gw:
                 cmd[0].append('no ' + group[0] + ' ' + VPN_Link[sources_line])
                 cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
+
+    elif a == 4:
+        if Line_Status[b][c][1]:
+            cmd[0].append('no ' + Line_Status[b][c][0] + ' ' +  Line_Status[b][c][1])
+        cmd[1].append(Line_Status[b][c][0] + VPN_Link[c-1] + ' ' + Line_Status[b][c][-1])
 
     print('\n你的操作将执行以下命令:')
     return cmd
@@ -218,17 +225,32 @@ def exitsw():
     switch_config_t.cmd('end')
     switch_config_t.cmd('exit')
 
-if __name__ == '__main__':
-    cycle = 0
-    hello()
-    Host_ip = Detect_Localip()                                                          # 检测IP并返回IP值
-    sh_run, switch_config_t = Login_Route(Gateway)                                      # 登录路由并返回showrun文本以及switch函数
-    Line_Status = Line_Detction(Link_Static_Route, Application_Static_Route)            # 检测线路并返回检测结果
+def pr():
     for x in Line_Status:
         for xx in x:
             print("%-35s链路接口为%15s" % (xx[-1][5:], xx[1]), '\n' + '-' * 60)
+
+
+root = tkinter.Tk()
+root.geometry('300x300')
+root.title('Hello World')
+All_object = tkinter.Button(root, text = '切换所有对象到X')
+VPN_object = tkinter.Button(root, text = '切换所有VPN到X')
+All_object.pack()
+VPN_object.pack()
+
+
+if __name__ == '__main__':
+    root.mainloop()
+    exit()
+    cycle = 0
+    # hello()
+    Host_ip = Detect_Localip()                                                          # 检测IP并返回IP值
+    sh_run, switch_config_t = Login_Route(Gateway)                                      # 登录路由并返回showrun文本以及switch函数
+    Line_Status = Line_Detction(Link_Static_Route, Application_Static_Route)            # 检测线路并返回检测结果
+
     Line_241, Line_242, Line_XM = Link_Group(Line_Status)
-    mune_result = ['3','2','3','1']
+    mune_result = ['4','0','2','1']
     cmd = Link_Switching(mune_result, Line_241, Line_242, Line_XM)
     for y in cmd:
         for yy in y:
