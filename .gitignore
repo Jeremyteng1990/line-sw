@@ -43,3 +43,4 @@ Temporary Items
 .apdisk
 #pycham
 .idea
+__pycache__
