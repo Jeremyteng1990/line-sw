@@ -16,7 +16,7 @@ from multiprocessing import Process
 from multiprocessing.queues import Queue
 from threading import Thread
 import tkinter.filedialog
-
+import ctypes
 
 
 
@@ -47,10 +47,14 @@ Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name Fo
 
 def Login_Route(gwip):                            # 检测网关通路 连接到目标， 成功则返回show run
     link = True
-    ping = subprocess.call("ping -n 3 -w 1 %s" % gwip, shell=True,
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if ping == 1:
-        gui_text.insert('end', Dividing + '无法连接到网关，请检查你的本地网络连接是否正常!\n')
+    try:
+        ping = subprocess.call("ping -n 3 -w 1 %s" % gwip, shell=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if ping == 1:
+            tkinter.messagebox.showerror('错误', '无法连接到网关，请检查你的本地网络连接是否正常!')
+            link = False
+    except Exception as err:
+        tkinter.messagebox.showerror('错误', str(err))
         link = False
     else:
         switch = ciscolib.Device(gwip, "ishsz")
@@ -70,8 +74,10 @@ def Login_Route(gwip):                            # 检测网关通路 连接到
                 switch.cmd('conf t')
                 print('系统初始化完成!\n')
                 return showrun, switch, link
-
-    return None, None, link
+    if link:
+        return None, None, link
+    else:
+        exit()
 
 
 def Detect_Localip():
@@ -298,11 +304,18 @@ def Show_Route_Def():           # 显示路由定义
 def Clear_Text():                # 清空output
         gui_text.delete('0.0', 'end')
 
+
+def Text_input():
+    print(gui_text.get('0.0', 'end'))
 if __name__ == '__main__':
+    # 获取当前分辨率
+    user32 = ctypes.windll.user32
+    screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
     # GUI框架
     root = tkinter.Tk()
-    root.geometry('500x600')
-    root.title('Hello World')
+    root.geometry('500x600+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
+    root.title('Fast Switch Route')
     # top_info_frame = tkinter.Frame(root, width=500, height=30, bg='green')
     # top_info_frame.propagate(False)
     # # top_info_frame.pack()
@@ -358,16 +371,17 @@ if __name__ == '__main__':
     tkinter.Button(SystemMenu, text='清空已缓存的命令', width=14, command=Cmd_Clear).pack(expand='yes')
     tkinter.Button(SystemMenu, text='执行命令！', width=14, bg='#87CEEB').pack(expand='yes')
 
-    Menubar = tkinter.Menu(root, font=('Arial', 15), bg='red')
+    Menubar = tkinter.Menu(root, font=ch_font, bg='red')
     root.config(menu=Menubar)
 
-    filemenu = tkinter.Menu(Menubar, tearoff=0, font=en_font)
+    filemenu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
     filemenu.add_command(label='Open')
-    filemenu.add_checkbutton(label='save')
+    filemenu.add_command(label='保存')
     filemenu.add_separator()
-    Menubar.add_cascade(label='File', menu=filemenu)
+    filemenu.add_command(label='打印日志窗口', command=Text_input)
+    Menubar.add_cascade(label='文件', menu=filemenu, font=ch_font)
 
-    line_switch = tkinter.Menu(Menubar, tearoff=0, font=en_font)
+    line_switch = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
     Menubar.add_cascade(label='线路切换', menu=line_switch)
     # -------------------------------------------------------------------------------------------------
     # line_switch.add_command(label='全体对象切换到X')
@@ -425,7 +439,6 @@ if __name__ == '__main__':
     x_to_x = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
     line_switch.add_cascade(label='将X路由切换到线路Y', menu=x_to_x, font=ch_font)
     # x_to_x_menu_dict = {}         存储动态变量
-
     for x1 in Line_Status:
         for x2 in x1:
             a = tkinter.Menu(x_to_x, tearoff=0, font=ch_font)
@@ -438,35 +451,20 @@ if __name__ == '__main__':
     help_menu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
     Menubar.add_cascade(label='帮助', menu=help_menu, font=ch_font)
 
-    #                    print(Line_Status.index(x1), x1.index(x2), VPN_Link.index(x3))
-    #                 x_to_x_a[x2[-1][5:]] = Line_Status.index(x1)
-    #                 x_to_x_b[x2[-1][5:]] = x1.index(x2)
-    #                 x_to_x_c[x2[-1][5:]] = VPN_Link.index(x3)
-    #                 x_to_x_label[x2[-1][5:]] = '切换到%s' % x3
-    # for xx1 in x_to_x_menu_dict.items():
-    #     xx1[1].add_command(label=x_to_x_label[xx1[0]], command=lambda: input_command(4, x_to_x_a[xx1[0]], x_to_x_b[xx1[0]], x_to_x_c[xx1[0]]))
-    #
+    def about_frame():
+        about = tkinter.Tk()
+        about.geometry('280x340+%d+%d' % (screensize[0]//2 - 110, screensize[1]//2 - 150))
+        about.title('关于')
+        about.propagate(False)
+        about.configure(background='#696969')
+        # about_text = tkinter.Text(about, font=('Microsoft YaHei', 8), width=210, height=290, bg='#696969', fg='#fffafa')
+        # about_text.bind("<KeyPress>", lambda e: "break")
+        # about_text.pack()
+        # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
+        tkinter.Label(about, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 12, 'bold')).pack(anchor='nw')
+        tkinter.Label(about, text='\n一个用Python和Tkinter写的cisco路由表切换工具', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack()
 
-                   # x_to_x_menu_dict[x2[-1][5:]].add_command(label='切换到%s' % x3, command=lambda: input_command(4,a,b,c))
-
-
-                    #                     # .add_command(label='切换到%s' % x3, command=lambda: input_command(4,1,1,1))
-                    #
-                    #             for x3 in VPN_Link:
-
-            # if x2[1] == '10.8.10.241':
-            #     tempdict[x2[-1][5:]].add_command(label='切换到10.8.10.242', command=lambda:input_command(4, 1, 1, 1))
-            #     tempdict[x2[-1][5:]].add_command(label='切换到10.0.0.6', command=lambda:input_command(4, 1, 1, 2))
-            # elif x2[1] == '10.8.10.242':
-            #     tempdict[x2[-1][5:]].add_command(label='切换到241', command=lambda:input_command(4, 1, 1, 0))
-            #     tempdict[x2[-1][5:]].add_command(label='切换到10.0.0.6', command=lambda:input_command(4, 1, 1, 2))
-            # elif x2[1] == '10.0.0.6':
-            #     tempdict[x2[-1][5:]].add_command(label='切换到241', command=lambda:input_command(4, 1, 1, 0))
-            #     tempdict[x2[-1][5:]].add_command(label='切换到242', command=lambda:input_command(4, 1, 1, 1))
-            # else:
-            #     tempdict[x2[-1][5:]].add_command(label='切换到241', command=lambda:input_command(4, 1, 1, 0))
-            #     tempdict[x2[-1][5:]].add_command(label='切换到242', command=lambda:input_command(4, 1, 1, 1))
-            #     tempdict[x2[-1][5:]].add_command(label='切换到10.0.0.6', command=lambda:input_command(4, 1, 1, 2))
+    help_menu.add_command(label='关于', command=about_frame)
 
 
     # nb = Notebook(info, height = 240,width=480)
