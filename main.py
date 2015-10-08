@@ -15,6 +15,9 @@ import logging
 from multiprocessing import Process
 from multiprocessing.queues import Queue
 from threading import Thread
+import tkinter.filedialog
+
+
 
 
 Cmd = [[], []]
@@ -244,6 +247,7 @@ def Cmd_Clear():        # 清除缓存的命令
     global Cmd
     Cmd = [[], []]
     gui_text.insert('end', Dividing + '已清空！')
+    gui_text.see('end')
 
 
 def all_object_menu_box(message, *args):                          # 全体对象切换到X --> 切换到241/242网关
@@ -431,6 +435,9 @@ if __name__ == '__main__':
                     # command=lambda x3=x3 , x1=x1, x2=x2: input_command   创建当前循环的快照
                     a.add_command(label='切换到%s' % x3, command=lambda x3=x3 , x1=x1, x2=x2: input_command(4, Line_Status.index(x1), x1.index(x2), VPN_Link.index(x3)))
     # --------------------------------------------------------------------------------------------------
+    help_menu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
+    Menubar.add_cascade(label='帮助', menu=help_menu, font=ch_font)
+
     #                    print(Line_Status.index(x1), x1.index(x2), VPN_Link.index(x3))
     #                 x_to_x_a[x2[-1][5:]] = Line_Status.index(x1)
     #                 x_to_x_b[x2[-1][5:]] = x1.index(x2)
