@@ -3,7 +3,6 @@ __author__ = 'Sonny'
 import ciscolib
 import socket
 import subprocess
-import os
 import tkinter
 import tkinter.messagebox
 import tkinter.font
@@ -17,8 +16,10 @@ from multiprocessing.queues import Queue
 from threading import Thread
 import tkinter.filedialog
 import ctypes
+import re
 
 x_to_x_menu_dict = {}
+No_Online = []
 line_switch = None
 Cmd = [[], []]
 Dividing = '\n\n' + '--*--' * 13 + '\n\n'
@@ -43,6 +44,19 @@ Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name Fo
                             ["ip route 219.134.185.204 255.255.255.255","name For-IE-Penghaiyun"],
                             ["ip route 219.141.216.0 255.255.255.0",    "name For-LENOVO-INTERFACE"]
                             )
+
+
+def Input_Config():
+    configure = []
+    configurefile = open('Config.ini', 'r')
+    pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*|\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}$'
+    for x in configurefile.readlines():
+        result = re.match(pattern, x)
+        if result:
+            configure.append(result.group().strip().lstrip().rstrip(','))
+    for y in configure:
+        print(y)
+    configurefile.close()
 
 
 def Login_Route(gwip):                            # 检测网关通路 连接到目标， 成功则返回show run
@@ -137,7 +151,9 @@ def Link_Group(line_status):
             elif line[1] == VPN_Link[2]:
                 line_XM[line_status.index(group)].append([line[0], line[-1]])
             else:
-                print('%s 当前不存在！' % line[0])
+                global No_Online
+                No_Online.append(line[0] + ' ' + line[-1])
+                # print('%s 当前不存在！' % line[0])
     return line_241, line_242, line_XM
 
 
@@ -481,6 +497,7 @@ if __name__ == '__main__':
     tkinter.Button(OptionsMenu, text='显示路由定义', width=23, command=Show_Route_Def).grid(row=0, column=1, padx=1, pady=2)
     tkinter.Button(OptionsMenu, text='刷新路由状态', width=23, command=Flush_Route_Status).grid(row=1, column=0, padx=1, pady=2)
     tkinter.Button(OptionsMenu, text='刷新菜单', width=23, command=lambda: Line_Switch_Menu(True)).grid(row=1, column=1, padx=1, pady=2)
+    tkinter.Button(OptionsMenu, text='读取配置文件', width=23, command=Input_Config).grid(row=2, column=0, padx=1, pady=2)
     # tkinter.Button(OptionsMenu, text='删除切换菜单', width=23, command=test).grid(row=1, column=1, padx=1, pady=2)
     # tkinter.Button(OptionsMenu, text='所有VPN线路切换到241出口').grid(row=1, column=0, padx=1, pady=2)
     # tkinter.Button(OptionsMenu, text='所有VPN线路切换到242出口').grid(row=2, column=0, padx=1, pady=2)
