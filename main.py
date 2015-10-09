@@ -18,8 +18,8 @@ from threading import Thread
 import tkinter.filedialog
 import ctypes
 
-
-
+x_to_x_menu_dict = {}
+line_switch = None
 Cmd = [[], []]
 Dividing = '\n\n' + '--*--' * 13 + '\n\n'
 Gateway = '10.8.10.250'
@@ -123,11 +123,6 @@ def Line_Detction(sh_run, *args):
     return [Vpn_result, App_result]
 
 
-def read():
-    print("本工具用于给指定用户切换maps网络线路使用，"
-          "请勿滥用作为其他用途\n如遇到bug请截图并发送到it_yangsy@ish.com.cn. 谢谢！\nversion: beta 0.2")
-
-
 def Link_Group(line_status):
     # readme = [[vpn], [app]]
     line_241 = [[], []]
@@ -197,9 +192,6 @@ def Link_Switching(options, *args):
             Cmd[0].append('no ' + Line_Status[b][c][0] + ' ' + Line_Status[b][c][1])
         Cmd[1].append(Line_Status[b][c][0] + ' ' + VPN_Link[d] + ' ' + Line_Status[b][c][-1])
 
-    # print('\n你的操作将执行以下命令:')
-    # return cmd
-
 
 def Command():             # 执行命令
     try:
@@ -207,10 +199,12 @@ def Command():             # 执行命令
             for xx in x:
                 switch_config_t.cmd(xx)
     except Exception as err:
-        gui_text.insert('end', Dividing + '执行命令出现错误:\n' + str(err))
+        gui_text.insert('end', '\n执行命令出现错误:\n' + str(err))
     else:
         gui_text.insert('end', Dividing + '命令已执行完毕！\n')
-        Flush_Route_Status()    # 刷新状态
+        Flush_Route_Status()            # 刷新状态
+        Line_Switch_Menu(True)         # 刷新菜单
+        Cmd_Clear(False)               # 清空命令
     gui_text.see('end')
 
 
@@ -220,6 +214,7 @@ def Flush_Route_Status():       # 刷新路由状态
         switch_config_t.cmd('end')
         sh_run = str(switch_config_t.cmd('show run'))
         Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
+        switch_config_t.cmd('config t')
     except Exception as err:
         gui_text.insert('end', Dividing + '刷新路由状态失败:\n' + str(err))
     else:
@@ -227,7 +222,7 @@ def Flush_Route_Status():       # 刷新路由状态
     gui_text.see('end')
 
 
-def exitsw(tab, switch_config_t):
+def Exit_Switch(tab, switch_config_t):
     try:
         switch_config_t.cmd('end')
         switch_config_t.cmd('exit')
@@ -249,10 +244,11 @@ def Show_Cmd():         # 显示当前缓存的命令
         gui_text.see('end')
 
 
-def Cmd_Clear():        # 清除缓存的命令
+def Cmd_Clear(args=True):        # 清除缓存的命令
     global Cmd
     Cmd = [[], []]
-    gui_text.insert('end', Dividing + '已清空！')
+    if args:
+        gui_text.insert('end', Dividing + '已清空！\n')
     gui_text.see('end')
 
 
@@ -282,7 +278,7 @@ def Show_Status():              # 显示当前线路状态
         gui_text.insert('end', Dividing)
         for x in Line_Status:
             for xx in x:
-                gui_text.insert('end', "%-35s链路接口为%15s" % (xx[-1][5:], xx[1]) + '\n' + '-' * 60 + '\n')
+                gui_text.insert('end', " %-35s链路接口为%18s" % (xx[-1][5:], xx[1]) + '\n' + '-' * 65 + '\n')
         # tab.focus_force() 光标移动至末尾
         gui_text.see('end')          # 滚动条滚动到末尾
 
@@ -307,83 +303,66 @@ def Clear_Text():                # 清空output
 
 def Text_input():
     print(gui_text.get('0.0', 'end'))
-if __name__ == '__main__':
-    # 获取当前分辨率
-    user32 = ctypes.windll.user32
-    screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
 
-    # GUI框架
-    root = tkinter.Tk()
-    root.geometry('500x600+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
-    root.title('Fast Switch Route')
-    # top_info_frame = tkinter.Frame(root, width=500, height=30, bg='green')
-    # top_info_frame.propagate(False)
-    # # top_info_frame.pack()
-    button_frame = tkinter.Frame(root, width=500, height=200, bg='#E0FFFF')
-    button_frame.propagate(False)
-    button_frame.pack()
-    en_font = tkinter.font.Font(family='Arial', size=10, weight='normal')
-    ch_font = tkinter.font.Font(family='Microsoft YaHei', size=10, weight='normal')
-    tkinter.Label(root, text='Output Info:', font=en_font, bg='white').pack(fill='x', anchor='w')
-    info = tkinter.Frame(root, width=500, height=350, bg='#808080')                           # 输出文本之框架
-    info.propagate(False)
-    info.pack()
-# --------------------------------------------------------------------------------------------
-    gui_text = tkinter.Text(info, width=68, height=26)
-    # gui_text.bind("<KeyPress>", lambda e: "break")
-    gui_text.pack(side='left')      # , fill='y'
-    gui_text.insert('end', 'Hello World!\n')
-
-    scrollbar = tkinter.ttk.Scrollbar(info, orient='vertical', command=gui_text.yview)
-    scrollbar.pack(side='right', fill='y')
-    gui_text['yscrollcommand'] = scrollbar.set
-
-    Detect_Localip()
-    sh_run, switch_config_t, link = Login_Route(Gateway)
-    if link is False:
-        gui_text.insert('end', '连接路由器失败\n')
-    else:
-        Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
-        Line_241, Line_242, Line_XM = Link_Group(Line_Status)
-# ---------------------------------------------------------------------------------------------
-
-    OptionsMenu = tkinter.Frame(button_frame, width=350, height=200)
-    OptionsMenu.propagate(False)
-    OptionsMenu.pack(side='left')
-    #  boxinfo = tkinter.messagebox.showinfo('标题1', 'this 按钮1')
-    tkinter.Button(OptionsMenu, text='显示当前线路状态', width=23, command=Show_Status).grid(row=0, column=0, sticky='w', padx=1, pady=2)
-    tkinter.Button(OptionsMenu, text='显示路由定义', width=23, command=Show_Route_Def).grid(row=0, column=1, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='所有VPN线路切换到241出口').grid(row=1, column=0, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='所有VPN线路切换到242出口').grid(row=2, column=0, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='所有APP线路切换到241出口').grid(row=3, column=0, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='所有APP线路切换到242出口').grid(row=4, column=0, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='将241线路VPN切换到242出口').grid(row=1, column=1, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='将241线路APP切换到242出口').grid(row=2, column=1, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='将242线路VPN切换到241出口').grid(row=3, column=1, padx=1, pady=2)
-    # tkinter.Button(OptionsMenu, text='将242线路APP切换到241出口').grid(row=4, column=1, padx=1, pady=2)
-
-    SystemMenu = tkinter.Frame(button_frame, width=150, height=200, bg='#ffffe0')
-    SystemMenu.propagate(False)
-    SystemMenu.pack(side='right')
-    tkinter.Button(SystemMenu, text='清空输出信息', width=14, command=Clear_Text).pack(expand='yes')
-    tkinter.Button(SystemMenu, text='退出', width=14, command=lambda: exitsw(gui_text, switch_config_t)).pack(expand='yes')
-    tkinter.Button(SystemMenu, text='查看已缓存的命令', width=14, command=Show_Cmd).pack(expand='yes')
-    tkinter.Button(SystemMenu, text='清空已缓存的命令', width=14, command=Cmd_Clear).pack(expand='yes')
-    tkinter.Button(SystemMenu, text='执行命令！', width=14, bg='#87CEEB').pack(expand='yes')
-
-    Menubar = tkinter.Menu(root, font=ch_font, bg='red')
-    root.config(menu=Menubar)
-
+# -----------------------------------------------------------
+# 文件菜单
+def File_Menu():
     filemenu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
     filemenu.add_command(label='Open')
-    filemenu.add_command(label='保存')
+    filemenu.add_command(label='保存日志窗口', command=lambda: save_text(gui_text.get('0.0', 'end'), **save_options))
     filemenu.add_separator()
     filemenu.add_command(label='打印日志窗口', command=Text_input)
     Menubar.add_cascade(label='文件', menu=filemenu, font=ch_font)
 
-    line_switch = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
-    Menubar.add_cascade(label='线路切换', menu=line_switch)
-    # -------------------------------------------------------------------------------------------------
+    save_options = {}
+    save_options['defaultextension'] = '.txt'
+    save_options['filetypes'] = [('text files', '.txt'), ('all files', '.*')]
+    save_options['initialdir'] = 'C:\\'
+    save_options['initialfile'] = 'input.txt'
+    save_options['parent'] = root
+    save_options['title'] = '保存输出'
+
+    def save_text(txt, **args):
+        try:
+            save = tkinter.filedialog.asksaveasfile(mode='w', **args)
+            save.write(txt)
+            save.close()
+        except Exception:
+            gui_text.insert('end', Dividing + '未能成功保存!\n')
+            gui_text.see('end')
+# --------------------------------------------------------------------------------------------------
+# 帮助菜单
+def Help_Menu():
+    help_menu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
+    Menubar.add_cascade(label='帮助', menu=help_menu, font=ch_font)
+
+    def about_frame():
+        about = tkinter.Tk()
+        about.geometry('280x340+%d+%d' % (screensize[0]//2 - 110, screensize[1]//2 - 150))
+        about.title('关于')
+        about.propagate(False)
+        about_text_frame = tkinter.Frame(about, width=270, height=300, bg='#696969')
+        about_text_frame.propagate(False)
+        about_text_frame.pack(side='top')
+        about_close = tkinter.Button(about, text='关闭', width=12, command=lambda: about.destroy())
+        about_close.pack()
+        # about.configure(background='#696969')
+        # about_text = tkinter.Text(about, font=('Microsoft YaHei', 8), width=210, height=290, bg='#696969', fg='#fffafa')
+        # about_text.bind("<KeyPress>", lambda e: "break")
+        # about_text.pack()
+        # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
+        tkinter.Label(about_text_frame, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 12, 'bold')).pack(anchor='nw')
+        tkinter.Label(about_text_frame, text='\n一个用Python和Tkinter写的Cisco路由表切换工具', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack()
+    help_menu.add_command(label='关于', command=about_frame)
+# ------------------------------------------------------------------------------------
+
+def Line_Switch_Menu(*args):
+    global line_switch
+    if args:
+        line_switch.delete(0, 'end')
+    else:
+        line_switch = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
+        Menubar.add_cascade(label='线路切换', menu=line_switch)
     # line_switch.add_command(label='全体对象切换到X')
     all_object_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
     line_switch.add_cascade(label='全体对象切换到X', menu=all_object_menu, font=ch_font)
@@ -438,40 +417,98 @@ if __name__ == '__main__':
     # --------------------------------------------------------------------------------------------------
     x_to_x = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
     line_switch.add_cascade(label='将X路由切换到线路Y', menu=x_to_x, font=ch_font)
-    # x_to_x_menu_dict = {}         存储动态变量
+    global x_to_x_menu_dict         # 存储动态变量
+    if args:
+        for y in x_to_x_menu_dict.items():
+            y[1].delete('0', 'end')
+        gui_text.insert('end', Dividing + '菜单已刷新！')
     for x1 in Line_Status:
         for x2 in x1:
-            a = tkinter.Menu(x_to_x, tearoff=0, font=ch_font)
-            x_to_x.add_cascade(label=x2[-1][5:], menu=a, font=ch_font)
+            x_to_x_menu_dict[x2[-1][5:]] = tkinter.Menu(x_to_x, tearoff=0, font=ch_font)
+            x_to_x.add_cascade(label=x2[-1][5:], menu=x_to_x_menu_dict[x2[-1][5:]], font=ch_font)
             for x3 in VPN_Link:
                 if x2[1] != x3:
                     # command=lambda x3=x3 , x1=x1, x2=x2: input_command   创建当前循环的快照
-                    a.add_command(label='切换到%s' % x3, command=lambda x3=x3 , x1=x1, x2=x2: input_command(4, Line_Status.index(x1), x1.index(x2), VPN_Link.index(x3)))
-    # --------------------------------------------------------------------------------------------------
-    help_menu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
-    Menubar.add_cascade(label='帮助', menu=help_menu, font=ch_font)
-
-    def about_frame():
-        about = tkinter.Tk()
-        about.geometry('280x340+%d+%d' % (screensize[0]//2 - 110, screensize[1]//2 - 150))
-        about.title('关于')
-        about.propagate(False)
-        about.configure(background='#696969')
-        # about_text = tkinter.Text(about, font=('Microsoft YaHei', 8), width=210, height=290, bg='#696969', fg='#fffafa')
-        # about_text.bind("<KeyPress>", lambda e: "break")
-        # about_text.pack()
-        # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
-        tkinter.Label(about, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 12, 'bold')).pack(anchor='nw')
-        tkinter.Label(about, text='\n一个用Python和Tkinter写的cisco路由表切换工具', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack()
-
-    help_menu.add_command(label='关于', command=about_frame)
+                    x_to_x_menu_dict[x2[-1][5:]].add_command(label='切换到%s' % x3, command=lambda x3=x3 , x1=x1, x2=x2: input_command(4, Line_Status.index(x1), x1.index(x2), VPN_Link.index(x3)))
 
 
+if __name__ == '__main__':
+    # 获取当前分辨率
+    user32 = ctypes.windll.user32
+    screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
+    # GUI框架
+    root = tkinter.Tk()
+    root.geometry('500x600+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
+    root.title('Fast Switch Route')
+    root.resizable(False, False)
+    # top_info_frame = tkinter.Frame(root, width=500, height=30, bg='green')
+    # top_info_frame.propagate(False)
+    # # top_info_frame.pack()
+    button_frame = tkinter.Frame(root, width=500, height=200, bg='#E0FFFF')
+    button_frame.propagate(False)
+    button_frame.pack()
+    en_font = tkinter.font.Font(family='Arial', size=10, weight='normal')
+    ch_font = tkinter.font.Font(family='Microsoft YaHei', size=10, weight='normal')
+    tkinter.Label(root, text='Output Info:', font=en_font, bg='white').pack(fill='x', anchor='w')
+    info = tkinter.Frame(root, width=500, height=350, bg='#d5d2d2')                           # 输出文本之框架
+    info.propagate(False)
+    info.pack()
+# --------------------------------------------------------------------------------------------
+    gui_text = tkinter.Text(info, width=68, height=26,  bg='#696969', fg='#FFFFFF')
+    # gui_text.bind("<KeyPress>", lambda e: "break")
+    gui_text.pack(side='left')      # , fill='y'
+    gui_text.insert('end', 'Hello World!\n')
+
+    scrollbar = tkinter.ttk.Scrollbar(info, orient='vertical', command=gui_text.yview)
+    scrollbar.pack(side='right', fill='y')
+    gui_text['yscrollcommand'] = scrollbar.set
+
+    Detect_Localip()
+    sh_run, switch_config_t, link = Login_Route(Gateway)
+    if link is False:
+        gui_text.insert('end', '连接路由器失败\n')
+    else:
+        Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
+        Line_241, Line_242, Line_XM = Link_Group(Line_Status)
+# ---------------------------------------------------------------------------------------------
+   # 按钮
+    OptionsMenu = tkinter.Frame(button_frame, width=350, height=200)
+    OptionsMenu.propagate(False)
+    OptionsMenu.pack(side='left')
+    #  boxinfo = tkinter.messagebox.showinfo('标题1', 'this 按钮1')
+    tkinter.Button(OptionsMenu, text='显示当前线路状态', width=23, command=Show_Status).grid(row=0, column=0, sticky='w', padx=1, pady=2)
+    tkinter.Button(OptionsMenu, text='显示路由定义', width=23, command=Show_Route_Def).grid(row=0, column=1, padx=1, pady=2)
+    tkinter.Button(OptionsMenu, text='刷新路由状态', width=23, command=Flush_Route_Status).grid(row=1, column=0, padx=1, pady=2)
+    tkinter.Button(OptionsMenu, text='刷新菜单', width=23, command=lambda: Line_Switch_Menu(True)).grid(row=1, column=1, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='删除切换菜单', width=23, command=test).grid(row=1, column=1, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='所有VPN线路切换到241出口').grid(row=1, column=0, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='所有VPN线路切换到242出口').grid(row=2, column=0, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='所有APP线路切换到241出口').grid(row=3, column=0, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='所有APP线路切换到242出口').grid(row=4, column=0, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='将241线路VPN切换到242出口').grid(row=1, column=1, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='将241线路APP切换到242出口').grid(row=2, column=1, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='将242线路VPN切换到241出口').grid(row=3, column=1, padx=1, pady=2)
+    # tkinter.Button(OptionsMenu, text='将242线路APP切换到241出口').grid(row=4, column=1, padx=1, pady=2)
+
+    SystemMenu = tkinter.Frame(button_frame, width=150, height=200, bg='#ffffe0')
+    SystemMenu.propagate(False)
+    SystemMenu.pack(side='right')
+    tkinter.Button(SystemMenu, text='清空输出信息', width=14, command=Clear_Text).pack(expand='yes')
+    tkinter.Button(SystemMenu, text='退出', width=14, command=lambda: Exit_Switch(gui_text, switch_config_t)).pack(expand='yes')
+    tkinter.Button(SystemMenu, text='查看已缓存的命令', width=14, command=Show_Cmd).pack(expand='yes')
+    tkinter.Button(SystemMenu, text='清空已缓存的命令', width=14, command=Cmd_Clear).pack(expand='yes')
+    tkinter.Button(SystemMenu, text='执行命令！', command=Command, width=14, bg='#87CEEB').pack(expand='yes')
+    # ---------------------------------------------------------------------------------------------
     # nb = Notebook(info, height = 240,width=480)
     # tab = tkinter.Text(nb)
     # nb.add(tab, text='log')
     # nb.pack()
-
+    Menubar = tkinter.Menu(root, font=ch_font, bg='red')        # 菜单栏
+    root.config(menu=Menubar)
+    File_Menu()             # 文件
+    Line_Switch_Menu()      # 链路切换
+    Help_Menu()             # 帮助
     root.mainloop()
 
 #    box2 = tkinter.Listbox(info, width=68)
@@ -480,20 +517,4 @@ if __name__ == '__main__':
 
 # box = tkinter.Message(SystemMenu,text='message' * 20,width=390,bg='red')
 # box.pack(anchor='nw')
-
-
-#if __name__ == '__main__':
-
-    #cycle = 0
-    # hello()
-    # Host_ip = Detect_Localip()                                                          # 检测IP并返回IP值
-    # sh_run, switch_config_t = Login_Route(Gateway)                                      # 登录路由并返回showrun文本以及switch函数
-    # Line_Status = Line_Detction(Link_Static_Route, Application_Static_Route)            # 检测线路并返回检测结果
-    # Gui()
-    # Line_241, Line_242, Line_XM = Link_Group(Line_Status)
-    # mune_result = ['4','0','2','1']
-    # cmd = Link_Switching(mune_result, Line_241, Line_242, Line_XM)
-    # for y in cmd:
-    #     for yy in y:
-    #         print(yy)
 
