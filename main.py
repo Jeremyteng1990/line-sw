@@ -17,6 +17,7 @@ from threading import Thread
 import tkinter.filedialog
 import ctypes
 import re
+import codecs
 
 x_to_x_menu_dict = {}
 No_Online = []
@@ -47,9 +48,10 @@ Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name Fo
 
 
 def Input_Config():
+    '读取配置文件并组成列表'
     configure = []
-    configurefile = open('Config.ini', 'r')
-    pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*|\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}$'
+    configurefile = codecs.open('Config.ini', 'r', encoding='utf-8')
+    pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*|\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*'
     for x in configurefile.readlines():
         result = re.match(pattern, x)
         if result:
@@ -59,7 +61,8 @@ def Input_Config():
     configurefile.close()
 
 
-def Login_Route(gwip):                            # 检测网关通路 连接到目标， 成功则返回show run
+def Login_Route(gwip):
+    '检测网关通路 连接到目标， 成功则返回show run'
     link = True
     try:
         ping = subprocess.call("ping -n 3 -w 1 %s" % gwip, shell=True,
@@ -93,7 +96,6 @@ def Login_Route(gwip):                            # 检测网关通路 连接到
     else:
         exit()
 
-
 def Detect_Localip():
     link = True
     try:
@@ -111,9 +113,8 @@ def Detect_Localip():
     if not link:
         exit()
 
-
 def Line_Detction(sh_run, *args):
-    # 检测当前所在线路
+    '检测当前所在线路'
     Vpn_result = []
     App_result = []
     x = True                    # 二次迭代为application
@@ -136,7 +137,6 @@ def Line_Detction(sh_run, *args):
         x = False
     return [Vpn_result, App_result]
 
-
 def Link_Group(line_status):
     # readme = [[vpn], [app]]
     line_241 = [[], []]
@@ -155,7 +155,6 @@ def Link_Group(line_status):
                 No_Online.append(line[0] + ' ' + line[-1])
                 # print('%s 当前不存在！' % line[0])
     return line_241, line_242, line_XM
-
 
 def Link_Switching(options, *args):
     global Cmd
@@ -208,8 +207,8 @@ def Link_Switching(options, *args):
             Cmd[0].append('no ' + Line_Status[b][c][0] + ' ' + Line_Status[b][c][1])
         Cmd[1].append(Line_Status[b][c][0] + ' ' + VPN_Link[d] + ' ' + Line_Status[b][c][-1])
 
-
-def Command():             # 执行命令
+def Command():
+    '执行命令'
     try:
         for x in Cmd:
             for xx in x:
@@ -222,7 +221,6 @@ def Command():             # 执行命令
         Line_Switch_Menu(True)         # 刷新菜单
         Cmd_Clear(False)               # 清空命令
     gui_text.see('end')
-
 
 def Flush_Route_Status():       # 刷新路由状态
     global Line_Status, sh_run
