@@ -24,34 +24,38 @@ No_Online = []
 line_switch = None
 Cmd = [[], []]
 Dividing = '\n\n' + '--*--' * 13 + '\n\n'
-Gateway = '10.8.10.250'
+# Gateway = '10.8.10.250'
 VPN_Link = ['10.8.10.241', '10.8.10.242', '10.0.0.6']
-Link_Static_Route = (["ip route 10.8.100.0 255.255.252.0", "name TO-SZ-Shajin",],
-                     ["ip route 10.12.0.0 255.255.252.0", "name TO-Xinxiang"],
-                     ["ip route 10.13.1.0 255.255.255.0", "name TO-Foshan-WH"],
-                     ["ip route 10.13.3.0 255.255.255.0", "name TO-Foshan-OFFICE"],
-                     ["ip route 10.16.0.0 255.255.252.0", "name TO-Shanghai"],
-                     ["ip route 10.17.0.0 255.255.252.0", "name TO-Beijing"],
-                     ["ip route 10.127.0.0 255.255.252.0", "name TO-HK"],
-                     ["ip route 10.69.1.0 255.255.255.0", "name TO-XM-Yuanchu"],
-                     ["ip route 10.68.0.0 255.255.252.0", "name TO-XM-Fibre-4M"],
-                     ["ip route 172.18.0.0 255.255.0.0", "name TO-XM-LenovoLAN"])
+# Link_Static_Route = (["ip route 10.8.100.0 255.255.252.0", "name TO-SZ-Shajin",],
+#                      ["ip route 10.12.0.0 255.255.252.0", "name TO-Xinxiang"],
+#                      ["ip route 10.13.1.0 255.255.255.0", "name TO-Foshan-WH"],
+#                      ["ip route 10.13.3.0 255.255.255.0", "name TO-Foshan-OFFICE"],
+#                      ["ip route 10.16.0.0 255.255.252.0", "name TO-Shanghai"],
+#                      ["ip route 10.17.0.0 255.255.252.0", "name TO-Beijing"],
+#                      ["ip route 10.127.0.0 255.255.252.0", "name TO-HK"],
+#                      ["ip route 10.69.1.0 255.255.255.0", "name TO-XM-Yuanchu"],
+#                      ["ip route 10.68.0.0 255.255.252.0", "name TO-XM-Fibre-4M"],
+#                      ["ip route 172.18.0.0 255.255.0.0", "name TO-XM-LenovoLAN"])
+#
+# Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name For-IPG"],
+#                             ["ip route 202.14.67.0 255.255.255.0",      "name For-DNS-PACnet"],
+#                             ["ip route 202.96.27.0 255.255.255.0",      "name For-LENOVO-INTERFACE-BACKUP"],
+#                             ["ip route 203.247.130.80 255.255.255.255", "name For-LG-CHEM"],
+#                             ["ip route 216.228.121.21 255.255.255.255", "name For-NVIDIA"],
+#                             ["ip route 219.134.185.204 255.255.255.255","name For-IE-Penghaiyun"],
+#                             ["ip route 219.141.216.0 255.255.255.0",    "name For-LENOVO-INTERFACE"]
+#                             )
 
-Application_Static_Route = (["ip route 103.30.232.33 255.255.255.255",  "name For-IPG"],
-                            ["ip route 202.14.67.0 255.255.255.0",      "name For-DNS-PACnet"],
-                            ["ip route 202.96.27.0 255.255.255.0",      "name For-LENOVO-INTERFACE-BACKUP"],
-                            ["ip route 203.247.130.80 255.255.255.255", "name For-LG-CHEM"],
-                            ["ip route 216.228.121.21 255.255.255.255", "name For-NVIDIA"],
-                            ["ip route 219.134.185.204 255.255.255.255","name For-IE-Penghaiyun"],
-                            ["ip route 219.141.216.0 255.255.255.0",    "name For-LENOVO-INTERFACE"]
-                            )
-
+Gateway = []
+Link_Static_Route = []
+Application_Static_Route = []
 
 def Input_Config():
     '读取配置文件并组成列表'
     configure = []
     configurefile = codecs.open('Config.ini', 'r', encoding='utf-8')
-    pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*|\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*'
+    pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
+    # |\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*   匹配无注释
     for x in configurefile.readlines():
         result = re.match(pattern, x)
         if result:
