@@ -349,38 +349,92 @@ def Again_Read_Configure():
     finally:
         gui_text.see('end')
 
-def Change_Password():
 
-    pw = tkinter.Tk()
-    pw.geometry('250x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
-    pw.title('修改连接密码')
-    pw.propagate(False)
 
-    class PopUp(tkinter.Toplevel):
-        def __init__(self, value):
-            tkinter.Toplevel.__init__(self)
-            self.value = tkinter.StringVar()
-            tkinter.Label(self, text='返回名字').pack()
-            tkinter.Entry(self, textvariable=self.value).pack()
-            tkinter.Button(self, text='enter', command=lambda: self.callback(value)).pack()
+def Change_Password(tk):
+    # pw = tkinter.Tk()
+    # pw.geometry('240x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
+    # pw.title('修改连接密码')
+    # pw.propagate(False)
+    # tkinter.Button(pw, text='test', command=lambda: App().mainloop()).pack()
 
-        def callback(self, value):
-            value.append(self.value.get())
+    # login_value = tkinter.StringVar()
+    # Privileged_value = tkinter.StringVar()
+    # tkinter.Label(pw, text='登录密码', width=10).grid(row=0, column=0)
+    # tkinter.Label(pw, text='特权密码', width=10).grid(row=1, column=0)
+    #
+    # a = tkinter.Entry(pw, textvariable=login_value, width=20).grid(row=0, column=1)
+    # tkinter.Entry(pw, textvariable=Privileged_value, width=20).grid(row=1, column=1)
+    #
+    # tkinter.Button(pw, text='确定', width=10, command=lambda: Save(pw, a, Privileged_value)).grid(row=2, column=0)
+    # tkinter.Button(pw, text='取消', width=10, command=lambda: pw.destroy()).grid(row=2, column=1)
+    #
+    # def Save(pw,login_value,Privileged_value):
+    #     print(login_value.get(), Privileged_value.get())
+    #     #pw.destroy()
+    class App(tkinter.Frame):
+        def __init__(self, master=None):
+            tkinter.Frame.__init__(self, master)
+            self.pack()
+
+            self.Login_pwd = tkinter.Entry(self)
+            self.Login_pwd.grid(row=0, column=1, pady=3)
+            self.Privileged_pwd = tkinter.Entry(self)
+            self.Privileged_pwd.grid(row=1, column=1, pady=3)
+
+            self.login_lab = tkinter.Label(self, text='登录密码')
+            self.login_lab.grid(row=0, column=0, pady=4, padx=3, sticky='w')
+            self.Privileged_lab = tkinter.Label(self, text='特权密码')
+            self.Privileged_lab.grid(row=1, column=0, pady=4, padx=3, sticky='w')
+
+            self.button = tkinter.Button(self, text="确定", width=6, command=self.upper)
+            self.button.grid(row=2, column=0, pady=5, padx=30, sticky='w', columnspan=2)
+            self.button_2 = tkinter.Button(self, text="取消", width=6, command=lambda: self.destroy())
+            self.button_2.grid(row=2, column=1, pady=5, padx=30, columnspan=2, sticky='e')
+
+            self.contents = tkinter.StringVar()
+            self.contents.set("this is a variable")
+            self.Login_pwd.config(textvariable=self.contents)
+            self.Login_pwd.bind('<Key-Return>', self.print_contents)
+
+            self.button_2.bind('<Key-Return>', None)
+        def upper(self):
+            str = self.contents.get()
+            self.contents.set(str)
+            print('the contents is : ', self.contents.get())
             self.destroy()
 
-    class Pwd_gui():
-        def __init__(self,root):
-            self.root = root
-            self.root.geometry('250x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
-            self.value = []
-            tkinter.Button(root, text='pop_up', bg='yellow', command=lambda: self.callback_1()).pack(expand='yes')
-            tkinter.Button(root,text='print',command=lambda: self.callback_2()).pack(expand='yes')
-        def callback_1(self):
-                PopUp(self.value)
+        def print_contents(self, event):
+            print("hi. contents of entry is now ---->", self.contents.get())
+    App(tk).mainloop()
 
-        def callback_2(self):
-                print(str(self.value))
-    Pwd_gui(pw)
+    # class PopUp(tkinter.Toplevel):
+    #     def __init__(self, value):
+    #         tkinter.Toplevel.__init__(self)
+    #         self.value = tkinter.StringVar()
+    #         tkinter.Label(self, text='返回名字').pack()
+    #         tkinter.Entry(self, textvariable=self.value).pack()
+    #         tkinter.Button(self, text='enter', command=lambda: self.callback(value)).pack()
+    #
+    #     def callback(self, value):
+    #         value.append(self.value.get())
+    #         self.destroy()
+    #
+    # class Pwd_gui():
+    #     def __init__(self,root):
+    #         self.root = root
+    #         self.root.geometry('250x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
+    #         self.value = []
+    #         tkinter.Button(root, text='pop_up', bg='yellow', command=lambda: self.callback_1()).pack(expand='yes')
+    #         #tkinter.Button(root,text='print',command=lambda: self.callback_2()).pack(expand='yes')
+    #     def callback_1(self):
+    #             App(self,root)
+
+
+
+        # def callback_2(self):
+        #         print(str(self.value))
+
 
 
 def Gui_File_Menu():
@@ -388,7 +442,7 @@ def Gui_File_Menu():
     # filemenu.add_command(label='Open')
     filemenu.add_command(label='重新登录到路由', command=Again_Login)
     filemenu.add_command(label='重新读取配置文件', command=Again_Read_Configure)
-    filemenu.add_command(label='修改密码', command=Change_Password)
+    filemenu.add_command(label='修改连接密码', command=lambda: Change_Password(button_frame))
     filemenu.add_separator()
     filemenu.add_command(label='保存日志窗口', command=lambda: save_text(gui_text.get('0.0', 'end'), **save_options))
     filemenu.add_command(label='打印日志窗口', command=Text_input)
@@ -561,7 +615,7 @@ if __name__ == '__main__':
     root = tkinter.Tk()
     root.geometry('500x600+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
     root.title('Fast Switch Route')
-    root.resizable(False, False)
+    # root.resizable(False, False)
     # top_info_frame = tkinter.Frame(root, width=500, height=30, bg='green')
     # top_info_frame.propagate(False)
     # # top_info_frame.pack()
@@ -576,7 +630,7 @@ if __name__ == '__main__':
     info.pack()
 # --------------------------------------------------------------------------------------------
     # 绘制文本框
-    gui_text = tkinter.Text(info, width=68, height=30,  bg='#696969', fg='#FFFFFF')
+    gui_text = tkinter.Text(info, width=68, height=30,  bg='#494848', fg='#d0d0d0')
     # gui_text.bind("<KeyPress>", lambda e: "break")
     gui_text.pack(side='left')      # , fill='y'
     scrollbar = tkinter.ttk.Scrollbar(info, orient='vertical', command=gui_text.yview)
@@ -590,7 +644,6 @@ if __name__ == '__main__':
     if Input_Config():
         if Detect_Localip():
             sh_run, switch_config_t, link = Login_Route(Gateway)
-            gui_text.insert('end', '\n已成功连接到路由!\n')
             if link:
                 Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
                 Line_241, Line_242, Line_XM = Link_Group(Line_Status)
