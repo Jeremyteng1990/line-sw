@@ -9,7 +9,7 @@ import tkinter.font
 import tkinter.ttk
 from tkinter.ttk import Notebook
 import time
-import sys
+import os
 import logging
 from multiprocessing import Process
 from multiprocessing.queues import Queue
@@ -19,7 +19,8 @@ import ctypes
 import re
 import codecs
 import pyaes
-
+import binascii
+import base64
 
 x_to_x_menu_dict = {}
 No_Online = []
@@ -66,14 +67,14 @@ def Input_Config():
     return True
 
 
-def Login_Route(gwip):
+def Login_Route(gwip, ):
     '检测网关通路 连接到目标， 成功则返回show run'
     ping = subprocess.call("ping -n 2 -w 1 %s" % gwip, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if ping == 1:
         gui_text.insert('end', Dividing + '无法连接到网关，请检查你的本地网络连接是否正常!\n')
         gui_text.see('end')
         return None, None, False
-    switch = ciscolib.Device(gwip, "ishsz")
+    switch = ciscolib.Device(gwip, "ishs")
     try:
         switch.connect()
     except Exception as err:
@@ -349,107 +350,103 @@ def Again_Read_Configure():
     finally:
         gui_text.see('end')
 
+def Encrypted_Decrypt(mode, text):
+    print('原始字符串：%s' % text)
+    key = b"This_key_for_demo_purposes_only!"
+    aes = pyaes.AESModeOfOperationCTR(key)
+    if mode == 'Encrypted':
+        ciphertext = aes.encrypt(text)
+        print('加密为:' + repr(ciphertext))
 
+        aes = pyaes.AESModeOfOperationCTR(key)
+        decrypted = aes.decrypt(ciphertext)
+
+        print('解密为:' + decrypted.decode())
+
+        return ciphertext
+    elif mode == 'Decrypt':
+        decrypted = aes.decrypt(text)
+        print(decrypted)
+        return decrypted
 
 def Change_Password(tk):
-    # pw = tkinter.Tk()
-    # pw.geometry('240x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
-    # pw.title('修改连接密码')
-    # pw.propagate(False)
-    # tkinter.Button(pw, text='test', command=lambda: App().mainloop()).pack()
-
-    # login_value = tkinter.StringVar()
-    # Privileged_value = tkinter.StringVar()
-    # tkinter.Label(pw, text='登录密码', width=10).grid(row=0, column=0)
-    # tkinter.Label(pw, text='特权密码', width=10).grid(row=1, column=0)
+    pass
     #
-    # a = tkinter.Entry(pw, textvariable=login_value, width=20).grid(row=0, column=1)
-    # tkinter.Entry(pw, textvariable=Privileged_value, width=20).grid(row=1, column=1)
+    #     pw = tkinter.Tk()
+    #     pw.geometry('240x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
+    #     pw.title('修改连接密码')
+    #     pw.propagate(False)
+    #     tkinter.Button(pw, text='test', command=lambda: App().mainloop()).pack()
     #
-    # tkinter.Button(pw, text='确定', width=10, command=lambda: Save(pw, a, Privileged_value)).grid(row=2, column=0)
-    # tkinter.Button(pw, text='取消', width=10, command=lambda: pw.destroy()).grid(row=2, column=1)
+    #     login_value = tkinter.StringVar()
+    #     Privileged_value = tkinter.StringVar()
+    #     tkinter.Label(pw, text='登录密码', width=10).grid(row=0, column=0)
+    #     tkinter.Label(pw, text='特权密码', width=10).grid(row=1, column=0)
     #
-    # def Save(pw,login_value,Privileged_value):
-    #     print(login_value.get(), Privileged_value.get())
-    #     #pw.destroy()
-    class App(tkinter.Frame):
-        def __init__(self, master=None):
-            tkinter.Frame.__init__(self, master)
-            self.pack()
-
-            self.Login_pwd = tkinter.Entry(self)
-            self.Login_pwd.grid(row=0, column=1, pady=3)
-            self.Privileged_pwd = tkinter.Entry(self)
-            self.Privileged_pwd.grid(row=1, column=1, pady=3)
-
-            self.login_lab = tkinter.Label(self, text='登录密码')
-            self.login_lab.grid(row=0, column=0, pady=4, padx=3, sticky='w')
-            self.Privileged_lab = tkinter.Label(self, text='特权密码')
-            self.Privileged_lab.grid(row=1, column=0, pady=4, padx=3, sticky='w')
-
-            self.button = tkinter.Button(self, text="确定", width=6, command=self.upper)
-            self.button.grid(row=2, column=0, pady=5, padx=30, sticky='w', columnspan=2)
-            self.button_2 = tkinter.Button(self, text="取消", width=6, command=lambda: self.destroy())
-            self.button_2.grid(row=2, column=1, pady=5, padx=30, columnspan=2, sticky='e')
-
-            self.contents = tkinter.StringVar()
-            self.contents.set("this is a variable")
-            self.Login_pwd.config(textvariable=self.contents)
-            self.Login_pwd.bind('<Key-Return>', self.print_contents)
-
-            self.button_2.bind('<Key-Return>', None)
-        def upper(self):
-            str = self.contents.get()
-            self.contents.set(str)
-            print('the contents is : ', self.contents.get())
-            self.destroy()
-
-        def print_contents(self, event):
-            print("hi. contents of entry is now ---->", self.contents.get())
-    App(tk).mainloop()
-
-    # class PopUp(tkinter.Toplevel):
-    #     def __init__(self, value):
-    #         tkinter.Toplevel.__init__(self)
-    #         self.value = tkinter.StringVar()
-    #         tkinter.Label(self, text='返回名字').pack()
-    #         tkinter.Entry(self, textvariable=self.value).pack()
-    #         tkinter.Button(self, text='enter', command=lambda: self.callback(value)).pack()
+    #     a = tkinter.Entry(pw, textvariable=login_value, width=20).grid(row=0, column=1)
+    #     tkinter.Entry(pw, textvariable=Privileged_value, width=20).grid(row=1, column=1)
     #
-    #     def callback(self, value):
-    #         value.append(self.value.get())
-    #         self.destroy()
+    #     tkinter.Button(pw, text='确定', width=10, command=lambda: Save(pw, a, Privileged_value)).grid(row=2, column=0)
+    #     tkinter.Button(pw, text='取消', width=10, command=lambda: pw.destroy()).grid(row=2, column=1)
     #
-    # class Pwd_gui():
-    #     def __init__(self,root):
-    #         self.root = root
-    #         self.root.geometry('250x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
-    #         self.value = []
-    #         tkinter.Button(root, text='pop_up', bg='yellow', command=lambda: self.callback_1()).pack(expand='yes')
-    #         #tkinter.Button(root,text='print',command=lambda: self.callback_2()).pack(expand='yes')
-    #     def callback_1(self):
-    #             App(self,root)
+    #     def Save(pw,login_value,Privileged_value):
+    #         print(login_value.get(), Privileged_value.get())
+    #         #pw.destroy()
+
+class App(tkinter.Frame):
+    def __init__(self, master=None):
+        tkinter.Frame.__init__(self, master)
+        self.pack()
+        self.Login_pwd = tkinter.Entry(self)
+        self.Login_pwd.grid(row=0, column=1, pady=3)
+        self.Privileged_pwd = tkinter.Entry(self)
+        self.Privileged_pwd.grid(row=1, column=1, pady=3)
+
+        self.login_lab = tkinter.Label(self, text='登录密码')
+        self.login_lab.grid(row=0, column=0, pady=4, padx=3, sticky='w')
+        self.Privileged_lab = tkinter.Label(self, text='特权密码')
+        self.Privileged_lab.grid(row=1, column=0, pady=4, padx=3, sticky='w')
+
+        self.contents = tkinter.StringVar()
+        self.contents.set("this is a variable")
+        self.Login_pwd.config(textvariable=self.contents)
+        self.Login_pwd.bind('<Key-Return>', self.print_contents)
+
+        self.Privileged_pwd_re = tkinter.StringVar()
+        self.Privileged_pwd.config(textvariable=self.Privileged_pwd_re)
+
+        self.button = tkinter.Button(self, text="确定", width=6, command=Encrypted_Decrypt('Encrypted', self.contents.get()))
+        self.button.grid(row=2, column=0, pady=5, padx=30, sticky='w', columnspan=2)
+        self.button_2 = tkinter.Button(self, text="取消", width=6, command=lambda: self.destroy())
+        self.button_2.grid(row=2, column=1, pady=5, padx=30, columnspan=2, sticky='e')
+
+    def upper(self):
+        str = self.contents.get().upper()
+        self.contents.set(str)
+        print('the contents is : ', self.contents.get())
+        # self.destroy()
+
+    def print_contents(self, event):
+        print("hi. contents of entry is now ---->", self.contents.get())
 
 
 
-        # def callback_2(self):
-        #         print(str(self.value))
+    #App(tk).mainloop()
 
-
-
-def Gui_File_Menu():
-    filemenu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
+def Gui_System_Menu():
+    filemenu = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
     # filemenu.add_command(label='Open')
     filemenu.add_command(label='重新登录到路由', command=Again_Login)
     filemenu.add_command(label='重新读取配置文件', command=Again_Read_Configure)
-    filemenu.add_command(label='修改连接密码', command=lambda: Change_Password(button_frame))
+    filemenu.add_command(label='修改连接密码', command=lambda: App(root))
     filemenu.add_separator()
     filemenu.add_command(label='保存日志窗口', command=lambda: save_text(gui_text.get('0.0', 'end'), **save_options))
     filemenu.add_command(label='打印日志窗口', command=Text_input)
     filemenu.add_command(label='清空消息窗口', command=Clear_Text)
     filemenu.add_separator()
     filemenu.add_command(label='退出', command=exit)
-    Menubar.add_cascade(label=' 系统 ', menu=filemenu, font=ch_font)
+    filemenu.add_command(label='加解密', command=lambda :Encrypted_Decrypt('Encrypted', 'asddsfgdfrrr'))
+    Menu_bar.add_cascade(label=' 系统 ', menu=filemenu, font=ch_font)
     save_options = {}
     save_options['defaultextension'] = '.txt'
     save_options['filetypes'] = [('text files', '.txt'), ('all files', '.*')]
@@ -468,8 +465,9 @@ def Gui_File_Menu():
             gui_text.see('end')
 
 def Gui_Help_Menu():
-    help_menu = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
-    Menubar.add_cascade(label='帮助', menu=help_menu, font=ch_font)
+    help_menu = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
+    Menu_bar.add_cascade(label=' 帮助 ', menu=help_menu, font=ch_font)
+
     def about_frame():
         about = tkinter.Tk()
         about.geometry('280x340+%d+%d' % (screensize[0]//2 - 140, screensize[1]//2 - 170))
@@ -490,12 +488,13 @@ def Gui_Help_Menu():
     help_menu.add_command(label='关于', command=about_frame)
 
 def Gui_Line_Switch_Menu(*args):
+    ''' 生成/更新链路切换菜单 '''
     global line_switch
     if args:
         line_switch.delete(0, 'end')
     else:
-        line_switch = tkinter.Menu(Menubar, tearoff=0, font=ch_font)
-        Menubar.add_cascade(label='线路切换', menu=line_switch)
+        line_switch = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
+        Menu_bar.add_cascade(label='线路切换', menu=line_switch)
     # line_switch.add_command(label='全体对象切换到X')
     all_object_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
     line_switch.add_cascade(label='全体对象切换到X', menu=all_object_menu, font=ch_font)
@@ -575,85 +574,87 @@ def Gui_Line_Switch_Menu(*args):
             separator = None
 
 def Gui_Button_Panel():
-    '按钮面板'
-    OptionsMenu = tkinter.Frame(button_frame, width=500, height=150)
+    '生成按钮面板'
+    OptionsMenu = tkinter.Frame(button_frame, width=500, height=120, bg='#FFFAFA')
     OptionsMenu.propagate(False)
-    OptionsMenu.pack(side='left')
-    #  boxinfo = tkinter.messagebox.showinfo('标题1', 'this 按钮1')
-    grid = {'padx': 4, 'pady': 3, 'sticky': 'ewns'}
-    tkinter.Button(OptionsMenu, text='显示当前线路状态', width=20, command=Show_Status).grid(row=0, column=0, **grid)
-    tkinter.Button(OptionsMenu, text='显示路由定义', width=20, command=Show_Route_Def).grid(row=0, column=1, **grid)
-    tkinter.Button(OptionsMenu, text='清空已缓存的命令', width=20, command=Cmd_Clear).grid(row=0, column=2,  **grid)
+    OptionsMenu.pack(side='bottom')
+    # boxinfo = tkinter.messagebox.showinfo('标题1', 'this 按钮1')
+    grid = {'padx': 8, 'pady': 4, 'sticky': 'ewns'}
+    tkinter.Button(OptionsMenu, text='显示当前线路状态', width=17, command=Show_Status).grid(row=0, column=0, **grid)
+    tkinter.Button(OptionsMenu, text='显示路由定义', width=17, command=Show_Route_Def).grid(row=0, column=1, **grid)
+    tkinter.Button(OptionsMenu, text='清空已缓存的命令', width=17, command=Cmd_Clear).grid(row=0, column=2,  **grid)
 
-    tkinter.Button(OptionsMenu, text='刷新菜单', width=20, command=lambda: Gui_Line_Switch_Menu(True)).grid(row=1, column=0, **grid)
-    tkinter.Button(OptionsMenu, text='刷新路由状态', width=20, command=lambda: Flush_Route_Status(switch_config_t)).grid(row=1, column=1, **grid)
-    tkinter.Button(OptionsMenu, text='查看已缓存的命令', width=20, command=Show_Cmd).grid(row=1, column=2,  **grid)
+    tkinter.Button(OptionsMenu, text='刷新菜单', width=17, command=lambda: Gui_Line_Switch_Menu(True)).grid(row=1, column=0, **grid)
+    tkinter.Button(OptionsMenu, text='刷新路由状态', width=17, command=lambda: Flush_Route_Status(switch_config_t)).grid(row=1, column=1, **grid)
+    tkinter.Button(OptionsMenu, text='查看已缓存的命令', width=17, command=Show_Cmd).grid(row=1, column=2,  **grid)
 
-    tkinter.Button(OptionsMenu, text='清空输出信息', width=20, command=Clear_Text).grid(row=2, column=0,  **grid)
-    tkinter.Button(OptionsMenu, text='登出路由并离开', width=20, command=Exit_Switch).grid(row=2, column=1,  **grid)
-    tkinter.Button(OptionsMenu, text='执行命令！', command=Run_Command, width=20, bg='#87CEEB').grid(row=2, column=2,  **grid)
-    # tkinter.Button(OptionsMenu, text='读取配置文件', width=23, command=Input_Config).grid(row=2, column=0, padx=1, pady=2)
-
-def Encrypted_Decrypt(mode, text):
-    key = "This_is_My_World2051"
-    aes = pyaes.AESModeOfOperationCTR(key)
-    if mode == 'Encrypted':
-        ciphertext = aes.encrypt(text)
-        print(ciphertext)
-        return ciphertext
-    elif mode == 'Decrypt':
-        decrypted = aes.decrypt(text)
-        print(decrypted)
-        return decrypted
+    tkinter.Button(OptionsMenu, text='清空输出信息', width=17, command=Clear_Text).grid(row=2, column=0,  **grid)
+    tkinter.Button(OptionsMenu, text='登出路由并离开', width=17, command=Exit_Switch).grid(row=2, column=1,  **grid)
+    tkinter.Button(OptionsMenu, text='执行命令！', command=Run_Command, width=17, bg='#87CEEB').grid(row=2, column=2,  **grid)
+    # tkinter.Button(OptionsMenu, text='读取配置文件', width=17=23, command=Input_Config).grid(row=2, column=0, padx=1, pady=2)
 
 
-if __name__ == '__main__':
+def Gui_Root_Frame():
+    '''初始化ROOT窗口并创建主要Frame'''
     # 获取当前分辨率
     user32 = ctypes.windll.user32
     screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
     # GUI框架
     root = tkinter.Tk()
-    root.geometry('500x600+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
+    # root.geometry('0x0+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
     root.title('Fast Switch Route')
-    # root.resizable(False, False)
+    root.resizable(width=False, height=True)
     # top_info_frame = tkinter.Frame(root, width=500, height=30, bg='green')
     # top_info_frame.propagate(False)
     # # top_info_frame.pack()
-    button_frame = tkinter.Frame(root, width=500, height=150, bg='#FFFAFA')
+    button_frame = tkinter.Frame(root, width=500, height=145, bg='#FFFAFA')
     button_frame.propagate(False)
     button_frame.pack()
     en_font = tkinter.font.Font(family='Arial', size=10, weight='normal')
     ch_font = tkinter.font.Font(family='Microsoft YaHei', size=10, weight='normal')
     tkinter.Label(root, text='Output Info:', font=en_font, bg='white').pack(fill='x', anchor='w')
-    info = tkinter.Frame(root, width=500, height=400, bg='#d5d2d2')                           # 输出文本之框架
-    info.propagate(False)
-    info.pack()
-# --------------------------------------------------------------------------------------------
-    # 绘制文本框
-    gui_text = tkinter.Text(info, width=68, height=30,  bg='#494848', fg='#d0d0d0')
+    info_frame = tkinter.Frame(root, width=500, height=400, bg='#d5d2d2')                           # 输出文本之框架
+    info_frame.propagate(False)
+    info_frame.pack()
+    return root, button_frame, info_frame, en_font, ch_font, screensize
+
+def Gui_Text_Frame():
+    '''绘制文本框架'''
+    gui_text = tkinter.Text(info_frame, width=68, height=30,  bg='#494848', fg='#C3C3C3')
+    gui_text.bind("<BackSpace>", lambda e: "break")         # 忽略退格键
     # gui_text.bind("<KeyPress>", lambda e: "break")
+    # gui_text['state'] = 'normal'
     gui_text.pack(side='left')      # , fill='y'
-    scrollbar = tkinter.ttk.Scrollbar(info, orient='vertical', command=gui_text.yview)
+
+    scrollbar = tkinter.ttk.Scrollbar(info_frame, orient='vertical', command=gui_text.yview)
     scrollbar.pack(side='right', fill='y')
     gui_text['yscrollcommand'] = scrollbar.set
-# -----------------------------------------------------------------------------------------------
-    # 业务逻辑
-    Menubar = tkinter.Menu(root, font=ch_font, bg='red')        # 菜单栏
+    return gui_text
+
+def Gui_Menu_Bar():
+    '''生成菜单栏'''
+    Menubar = tkinter.Menu(root, font=ch_font, bg='red')
     root.config(menu=Menubar)
-    Gui_File_Menu()             # 文件
+    return Menubar
+
+if __name__ == '__main__':
+    root, button_frame, info_frame, en_font, ch_font, screensize = Gui_Root_Frame()         # 构建主窗口
+    gui_text = Gui_Text_Frame()                                                             # 生成log框
+    Menu_bar = Gui_Menu_Bar()                                                               # 生成菜单栏
+    Gui_System_Menu()                                                                       # 生成系统菜单
     if Input_Config():
-        if Detect_Localip():
-            sh_run, switch_config_t, link = Login_Route(Gateway)
+        if Detect_Localip():                                                                # 检查本机IP与授权
+            sh_run, switch_config_t, link = Login_Route(Gateway)                            # 登录目标
             if link:
                 Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
                 Line_241, Line_242, Line_XM = Link_Group(Line_Status)
-                Gui_Line_Switch_Menu()      # 链路切换
-                Gui_Button_Panel()          # 按钮面板
+                Gui_Line_Switch_Menu()                                                      # 生成链路切换菜单
+                Gui_Button_Panel()                                                          # 生成按钮面板
                 gui_text.insert('0.0', 'Hello World!\n')
             else:
                 gui_text.insert('end', '连接路由器失败\n')
-    Gui_Help_Menu()             # 帮助
-    root.mainloop()
+    Gui_Help_Menu()                                                                         # 生成帮助菜单
+    root.mainloop()                                                                         # 启动循环
 
     # nb = Notebook(info, height = 240,width=480)
     # tab = tkinter.Text(nb)
@@ -663,3 +664,27 @@ if __name__ == '__main__':
     # box2.pack(side='left', fill='y')
     # box = tkinter.Message(SystemMenu,text='message' * 20,width=390,bg='red')
     # box.pack(anchor='nw')
+
+    # class PopUp(tkinter.Toplevel):
+    #     def __init__(self, value):
+    #         tkinter.Toplevel.__init__(self)
+    #         self.value = tkinter.StringVar()
+    #         tkinter.Label(self, text='返回名字').pack()
+    #         tkinter.Entry(self, textvariable=self.value).pack()
+    #         tkinter.Button(self, text='enter', command=lambda: self.callback(value)).pack()
+    #
+    #     def callback(self, value):
+    #         value.append(self.value.get())
+    #         self.destroy()
+    #
+    # class Pwd_gui():
+    #     def __init__(self,root):
+    #         self.root = root
+    #         self.root.geometry('250x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
+    #         self.value = []
+    #         tkinter.Button(root, text='pop_up', bg='yellow', command=lambda: self.callback_1()).pack(expand='yes')
+    #         #tkinter.Button(root,text='print',command=lambda: self.callback_2()).pack(expand='yes')
+    #     def callback_1(self):
+    #             App(self,root)
+    #     def callback_2(self):
+    #           print(str(self.value))
