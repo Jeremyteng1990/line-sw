@@ -2,58 +2,61 @@
 __author__ = 'Sonny'
 import ciscolib
 import socket
+import os
 import subprocess
 import tkinter
 import tkinter.messagebox
 import tkinter.font
 import tkinter.ttk
 from tkinter.ttk import Notebook
-import time
-import os
-import logging
-from multiprocessing import Process
-from multiprocessing.queues import Queue
-from threading import Thread
 import tkinter.filedialog
 import ctypes
 import re
 import codecs
 import pyaes
-import binascii
-import base64
+import win32com.client
+import shutil
+import datetime
+# import logging
+# from multiprocessing import Process
+# from multiprocessing.queues import Queue
+# from threading import Thread
 
-x_to_x_menu_dict = {}
-No_Online = []
+No_Online = []          # 配置文件中未活动路由
+Cmd = [[], []]          # 当前缓存命令
+x_to_x_menu_dict = {}   # x_to_x菜单字典
+now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 line_switch = None
-Cmd = [[], []]
 Dividing = '\n\n' + '--*--' * 13 + '\n\n'
 VPN_Link = ['10.8.10.241', '10.8.10.242', '10.0.0.6']
 
+
 def Input_Config():
     '读取配置文件并组成列表'
-    global Link_Static_Route, Application_Static_Route, Gateway
+    global Link_Static_Route, Application_Static_Route, Gateway, Login_pwd, Privileged_pwd
     Link_Static_Route, Application_Static_Route = [], []
+    gateway_regular = 'Gateway=( )?(\d{1,3}.){3}\d{1,3}\s'
+    Login_regular = 'Login_pwd=( )?\S*\s'
+    privileged_regular = 'Privileged_pwd=( )?\S*\s'
+    vsr_regular = 'VPN_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
+    asr_regular = 'Application_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
+    pattern = gateway_regular + '|' + Login_regular + '|' + privileged_regular + '|' + vsr_regular + '|' + asr_regular
+    # pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*|\[.*\]|(\d{1,3}.){3}\d{1,3}'
+    # |\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*   匹配无注释
     try:
-        configurefile = codecs.open('Config.ini', 'r', encoding='utf-8')
-        # pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*|\[.*\]|(\d{1,3}.){3}\d{1,3}'
-        # |\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*   匹配无注释
-        gateway_regular = 'Gateway=( )?(\d{1,3}.){3}\d{1,3}\s'
-        Login_regular = 'Login_pwd=( )?\S*\s'
-        privileged_regular = 'Privileged_pwd=( )?\S*\s'
-        vsr_regular = 'VPN_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
-        asr_regular = 'Application_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
-        pattern = gateway_regular + '|' + Login_regular + '|' + privileged_regular + '|' + vsr_regular + '|' + asr_regular
+        configurefile = codecs.open('Config.ini', 'rb', encoding='utf-8')
         for x in configurefile.readlines():
             pattern_re = re.match(pattern, x)
             if pattern_re:
                 patstr = pattern_re.group()
+                patstr_value = patstr[patstr.index('=')+1:].strip()
                 # print(patstr.strip())
                 if 'Gateway' in patstr:
-                    Gateway = patstr[patstr.index('=')+1:].strip()
+                    Gateway = patstr_value
                 elif 'Login_pwd' in patstr:
-                    Login_pwd = patstr[patstr.index('=')+1:].strip()
+                    Login_pwd = patstr_value
                 elif 'Privileged_pwd' in patstr:
-                    privileged_pwd = patstr[patstr.index('=')+1:].strip()
+                    Privileged_pwd = patstr_value
                 elif 'VPN_Static_Route' in patstr:
                     Link_Static_Route.append([patstr[patstr.index('=')+1:patstr.index('name')].strip(), patstr[patstr.index('name'):].strip()])
                 elif 'Application_Static_Route' in patstr:
@@ -62,29 +65,29 @@ def Input_Config():
                     print(patstr)
         configurefile.close()
     except Exception as err:
-        gui_text.insert('end', Dividing + '读取配置文件失败!\nError Code:%s' % str(err))
+        gui_text.insert('end', Dividing + '读取配置文件失败！\nError Code:%s' % str(err))
         return False
+    gui_text.insert('end', '读取配置文件完成...\n')
     return True
 
-
-def Login_Route(gwip, ):
+def Login_Route():
     '检测网关通路 连接到目标， 成功则返回show run'
-    ping = subprocess.call("ping -n 2 -w 1 %s" % gwip, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    ping = subprocess.call("ping -n 2 -w 1 %s" % Gateway, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if ping == 1:
-        gui_text.insert('end', Dividing + '无法连接到网关，请检查你的本地网络连接是否正常!\n')
+        gui_text.insert('end', '无法连接到网关，请检查你的本地网络连接是否正常！\n')
         gui_text.see('end')
         return None, None, False
-    switch = ciscolib.Device(gwip, "ishs")
+    switch = ciscolib.Device(Gateway, "%s" % Login_pwd)
     try:
         switch.connect()
     except Exception as err:
-        gui_text.insert('end', '无法登录到网关，请确认密码!\nError Code:' + str(err))
+        gui_text.insert('end', '无法登录到网关，请确认密码！\nError Code:' + str(err))
         gui_text.see('end')
     else:
         try:
-            switch.enable("ishsz2008")
+            switch.enable("%s" % Privileged_pwd)
         except Exception as err:
-            gui_text.insert('end', Dividing + '登录特权模式失败!\nError Code:' + str(err))
+            gui_text.insert('end', Dividing + '未能成功登录特权模式！\nError Code:' + str(err))
         else:
             showrun = str(switch.cmd("show run"))
             switch.cmd('conf t')
@@ -100,7 +103,7 @@ def Detect_Localip():
         return False
     else:
         if ip == '127.0.0.1':
-            gui_text.insert('end', Dividing + '无法获得有效的本机IP!\n')
+            gui_text.insert('end', Dividing + '无法获得有效的本机IP！\n')
             return False
         elif '192.168.5' in ip or '10.8.' in ip or '192.168.10' in ip:
             return ip
@@ -152,20 +155,38 @@ def Link_Group(line_status):
                 # print('%s 当前不存在！' % line[0])
     return line_241, line_242, line_XM
 
+
 def Link_Switching(options, *args):
+    '生成最终路由指令'
     global Cmd
     a, b, c, d = options[0], options[1], options[2], options[3]
     if d:
         xm = False
     else:
         xm = True
+
+    def check_command(command):
+        '过滤重复或者肯能产生冲突的命令'
+        for x in Cmd:
+            for route in x:
+                if command in route:
+                    gui_text.insert('end', '\n移除重复或冲突缓存:\n' + Cmd[Cmd.index(x)].pop(x.index(route)) + '\n')
+
+    if Cmd != [[], []]:
+        gui_text.insert('end', Dividing + '检查命令冲突...\n')
+
     if a == 1:                                            # 全体切换到241/242
         target_line = b - 1
         for gw in args:
             if args.index(gw) == target_line:
+                '''路由条目已在目标网关依然要检测缓存的命令'''
+                for check in gw:
+                    for check_2 in check:
+                        check_command(check_2[0])
                 continue
             for group in gw:
                 for iproute in group:
+                    check_command(iproute[0])
                     Cmd[0].append('no ' + iproute[0] + ' ' + VPN_Link[args.index(gw)])
                     Cmd[1].append(iproute[0] + ' ' + VPN_Link[target_line] + ' ' + iproute[-1])
             if xm:
@@ -175,8 +196,12 @@ def Link_Switching(options, *args):
         target_line = c - 1
         for gw in args:
             if args.index(gw) == target_line:
+                for check in gw[sources_type]:        # 路由条目已在目标网关依然要检测缓存的命令
+                    for check_2 in check:
+                        check_command(check_2[0])
                 continue
             for group in gw[sources_type]:
+                check_command(group[0])
                 Cmd[0].append('no ' + group[0] + ' ' + VPN_Link[args.index(gw)])
                 Cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
             if xm:
@@ -190,22 +215,29 @@ def Link_Switching(options, *args):
         target_line = d - 1
         for gw in args[sources_line][aa:c]:
             for group in gw:
+                check_command(group[0])
                 Cmd[0].append('no ' + group[0] + ' ' + VPN_Link[sources_line])
                 Cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
 
     elif a == 4:                                        # 将线路X 切换到出口Y
+        x = True
         global Line_Status
         if Line_Status[b][c][1]:
+            check_command(Line_Status[b][c][0])
             Cmd[0].append('no ' + Line_Status[b][c][0] + ' ' + Line_Status[b][c][1])
+            x = False
         if d is False:
             return None
+        if x:
+            check_command(Line_Status[b][c][0])
         Cmd[1].append(Line_Status[b][c][0] + ' ' + VPN_Link[d] + ' ' + Line_Status[b][c][-1])
+
 
 def Run_Command():
     '执行命令'
     global Line_241, Line_242, Line_XM
     if len(Cmd[0]) == 0 and len(Cmd[1]) == 0:
-        gui_text.insert('end', Dividing + '当前无缓存的命令!\n')
+        gui_text.insert('end', Dividing + '当前无缓存的命令！\n')
     else:
         try:
             for x in Cmd:
@@ -216,7 +248,7 @@ def Run_Command():
         else:
             gui_text.insert('end', Dividing + '命令已执行完毕！')
             Flush_Route_Status(switch_config_t)                     # 刷新状态
-            Gui_Line_Switch_Menu(True)                              # 刷新菜单
+            Gui_Line_Switch_Menu(True)                             # 刷新菜单
             Line_241, Line_242, Line_XM = Link_Group(Line_Status)    # 刷新链路组
             Cmd_Clear(False)                                        # 清空命令
     gui_text.see('end')
@@ -234,6 +266,7 @@ def Flush_Route_Status(switch_config_t):       # 刷新路由状态
         gui_text.insert('end', Dividing + '路由状态已刷新！')
     gui_text.see('end')
 
+
 def Exit_Switch():
     try:
         switch_config_t.cmd('end')
@@ -244,70 +277,82 @@ def Exit_Switch():
     finally:
         exit()
 
-def Show_Cmd():         # 显示当前缓存的命令
+
+def Show_Cmd(args):
+    '显示当前缓存的命令'
+    text = ['当前缓存的命令如下:\n\n',
+            '当前没有缓存命令！\n\n',
+            '以下命令已缓存，可以开始执行命令！\n\n',
+            '当前没有找到需要操作的内容！\n\n']
+    if args:
+        text_show = text[2:]
+    else:
+        text_show = text[:2]
     if Cmd != [[], []]:
-        gui_text.insert('end', Dividing + '当前缓存的命令如下:\n')
+        gui_text.insert('end', Dividing + text_show[0])
         for x in Cmd:
             for xx in x:
                 gui_text.insert('end', xx+'\n')
-        gui_text.see('end')
     else:
-        gui_text.insert('end',  Dividing + '当前没有缓存命令!')
-        gui_text.see('end')
+        gui_text.insert('end',  Dividing + text_show[1])
+    gui_text.see('end')
 
-def Cmd_Clear(args=True):        # 清除缓存的命令
+
+def Cmd_Clear(args=True):
+    '清除缓存的命令'
     global Cmd
     Cmd = [[], []]
-    if args:
+    if args:            # 手动清空
         gui_text.insert('end', Dividing + '已清空！\n')
     gui_text.see('end')
 
-def all_object_menu_box(message, *args):                          # 全体对象切换到X --> 切换到241/242网关
-        re = tkinter.messagebox.askyesnocancel(title='额外选项', message='是否包含厦门专线10.0.0.6上的%s ?' % message)
-        if re is None:
-            pass
-        else:
-            Link_Switching([args[0], args[1], args[2], re], Line_241, Line_242, Line_XM)
-            gui_text.insert('end', Dividing + '以下命令已缓存，可以开始执行命令！\n')
-            for x in Cmd:
-                for xx in x:
-                    gui_text.insert('end', xx+'\n')
-            gui_text.see('end')          # 滚动条滚动到末尾
+
+def all_object_menu_box(message, *args):
+    '全体对象切换到X --> 切换到241/242网关'
+
+    re = tkinter.messagebox.askyesnocancel(title='额外选项', message='是否包含厦门专线10.0.0.6上的%s ?' % message)
+    if re is None:
+        pass
+    else:
+        Link_Switching([args[0], args[1], args[2], re], Line_241, Line_242, Line_XM)
+        Show_Cmd(True)
+
 
 def Input_Command(*args):
         Link_Switching([args[0], args[1], args[2], args[3]], Line_241, Line_242, Line_XM)
-        gui_text.insert('end', Dividing + '以下命令已缓存，可以开始执行命令！\n')
-        for x in Cmd:
-            for xx in x:
-                gui_text.insert('end', xx+'\n')
-        gui_text.see('end')          # 滚动条滚动到末尾
+        Show_Cmd(True)
 
-def Show_Status():              # 显示当前线路状态
-        gui_text.insert('end', Dividing)
-        for x in Line_Status:
-            for xx in x:
-                gui_text.insert('end', " %-35s链路接口为%18s" % (xx[-1][5:], xx[1]) + '\n' + '-' * 65 + '\n')
-        # tab.focus_force() 光标移动至末尾
-        gui_text.see('end')          # 滚动条滚动到末尾
+def Show_Status():
+    '显示当前线路状态'
+    gui_text.insert('end', Dividing)
+    for x in Line_Status:
+        for xx in x:
+            gui_text.insert('end', " %-35s链路接口为%18s" % (xx[-1][5:], xx[1]) + '\n' + '-' * 65 + '\n')
+    # tab.focus_force() 光标移动至末尾
+    gui_text.see('end')          # 滚动条滚动到末尾
 
-def Show_Route_Def():           # 显示路由定义
+def Show_Route_Def():
+    '显示路由定义'
     route_len = 0
     name_len = 0
     gui_text.insert('end', Dividing)
     for x in [Link_Static_Route, Application_Static_Route]:
         for xx in x:
-            if route_len < len(xx[0]):route_len = len(xx[0])
-            if name_len < len(xx[1]):name_len = len(xx[1])
+            if route_len < len(xx[0]):
+                route_len = len(xx[0])
+            if name_len < len(xx[1]):
+                name_len = len(xx[1])
     for x in [Link_Static_Route, Application_Static_Route]:
         for xx in x:
             gui_text.insert('end', '%-*s %-*s' % (route_len, xx[0], name_len - 5, xx[1][5:]) + '\n' + '-' * 67 + '\n')
     gui_text.see('end')
 
-def Clear_Text():                # 清空output
-        gui_text.delete('0.0', 'end')
+def Clear_Text():
+    '''清空output'''
+    gui_text.delete('0.0', 'end')
 
 def Text_input():
-    # print(gui_text.get('0.0', 'end'))
+    '''print(gui_text.get('0.0', 'end'))'''
     gui_text.insert('end', Dividing + '打印功能还未实现...\n')
     gui_text.see('end')
 
@@ -319,81 +364,56 @@ def Again_Login():
     except:
         pass
     try:
-        sh_run, switch_config_t, link = Login_Route(Gateway)
+        sh_run, switch_config_t, link = Login_Route()
     except NameError as err:
         gui_text.insert('end', Dividing + '此时无法连使用此功能 :(\n' + str(err) + '\n')
     except Exception as err:
-        gui_text.insert('end', Dividing + '尝试从新连接失败!\nError Code:%s' % str(err) + '\n')
-    finally:
-        gui_text.see('end')
+        gui_text.insert('end', Dividing + '尝试从新连接失败！\nError Code:%s' % str(err) + '\n')
     if link:
-        gui_text.insert('end', Dividing + '已成功重新登录到路由!\n')
+        gui_text.insert('end', Dividing + '已成功重新登录到路由！\n')
+    gui_text.see('end')
 
 def Again_Read_Configure():
+    '重新读取配置并重新登录目标'
     global Line_Status, Line_241, Line_242, Line_XM, Gateway, switch_config_t, sh_run
+    gui_text.insert('end', Dividing)
     try:
         switch_config_t.disconnect()
     except:
         pass
     try:
         Input_Config()                                                                          # 读取配置
-        sh_run, switch_config_t, stat = Login_Route(Gateway)                                    # 连接目标
-        Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)        # 刷新线路状态信息
-        Line_241, Line_242, Line_XM = Link_Group(Line_Status)                                   # 刷新变量
-        Flush_Route_Status(switch_config_t)                                                     # 刷新路由show run
-        Gui_Line_Switch_Menu(True)                                                             # 刷新菜单
-
+        gui_text.insert('end', '尝试重新登录目标...\n')
+        sh_run, switch_config_t, status = Login_Route()                                           # 连接目标
+        if status:
+            Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)        # 刷新线路状态信息
+            Line_241, Line_242, Line_XM = Link_Group(Line_Status)                                   # 刷新变量
+            Flush_Route_Status(switch_config_t)                                                     # 刷新路由show run
+            Gui_Line_Switch_Menu()                                                                  # 刷新菜单
+            Gui_Button_Panel(Panel_Status)                                                          # 尝试生成面板
+        else:
+            gui_text.insert('end', '\n登录失败 :(')
     except BaseException as err:
         gui_text.insert('end', Dividing + '出现错误:\n' + str(err))
     else:
-        gui_text.insert('end', Dividing + '已重新载入！\n')
+        if status:
+            gui_text.insert('end', Dividing + '已重新载入！\n')
     finally:
         gui_text.see('end')
 
-def Encrypted_Decrypt(mode, text):
-    print('原始字符串：%s' % text)
-    key = b"This_key_for_demo_purposes_only!"
-    aes = pyaes.AESModeOfOperationCTR(key)
-    if mode == 'Encrypted':
-        ciphertext = aes.encrypt(text)
-        print('加密为:' + repr(ciphertext))
-
+def Decrypt(text):
+        '''解密登录密码'''
+        text_3 = str.encode(text)
+        print('原始字符串：%s' % text)
+        key = b"This_key_for_demo_purposes_only~"
         aes = pyaes.AESModeOfOperationCTR(key)
-        decrypted = aes.decrypt(ciphertext)
-
-        print('解密为:' + decrypted.decode())
-
-        return ciphertext
-    elif mode == 'Decrypt':
-        decrypted = aes.decrypt(text)
+        decrypted = aes.decrypt(text_3)
+        decrypted = decrypted.decode()
         print(decrypted)
         return decrypted
 
-def Change_Password(tk):
-    pass
-    #
-    #     pw = tkinter.Tk()
-    #     pw.geometry('240x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
-    #     pw.title('修改连接密码')
-    #     pw.propagate(False)
-    #     tkinter.Button(pw, text='test', command=lambda: App().mainloop()).pack()
-    #
-    #     login_value = tkinter.StringVar()
-    #     Privileged_value = tkinter.StringVar()
-    #     tkinter.Label(pw, text='登录密码', width=10).grid(row=0, column=0)
-    #     tkinter.Label(pw, text='特权密码', width=10).grid(row=1, column=0)
-    #
-    #     a = tkinter.Entry(pw, textvariable=login_value, width=20).grid(row=0, column=1)
-    #     tkinter.Entry(pw, textvariable=Privileged_value, width=20).grid(row=1, column=1)
-    #
-    #     tkinter.Button(pw, text='确定', width=10, command=lambda: Save(pw, a, Privileged_value)).grid(row=2, column=0)
-    #     tkinter.Button(pw, text='取消', width=10, command=lambda: pw.destroy()).grid(row=2, column=1)
-    #
-    #     def Save(pw,login_value,Privileged_value):
-    #         print(login_value.get(), Privileged_value.get())
-    #         #pw.destroy()
-
-class App(tkinter.Frame):
+class Gui_ChangePassword(tkinter.Frame):
+    '绘制修改密码框'
     def __init__(self, master=None):
         tkinter.Frame.__init__(self, master)
         self.pack()
@@ -407,45 +427,90 @@ class App(tkinter.Frame):
         self.Privileged_lab = tkinter.Label(self, text='特权密码')
         self.Privileged_lab.grid(row=1, column=0, pady=4, padx=3, sticky='w')
 
-        self.contents = tkinter.StringVar()
-        self.contents.set("this is a variable")
-        self.Login_pwd.config(textvariable=self.contents)
-        self.Login_pwd.bind('<Key-Return>', self.print_contents)
+        self.login_re = tkinter.StringVar()
+        self.Login_pwd.config(textvariable=self.login_re)
+        # self.contents.set("this is a variable")
+        # self.Login_pwd.bind('<Key-Return>', self.print_contents)
 
         self.Privileged_pwd_re = tkinter.StringVar()
         self.Privileged_pwd.config(textvariable=self.Privileged_pwd_re)
 
-        self.button = tkinter.Button(self, text="确定", width=6, command=Encrypted_Decrypt('Encrypted', self.contents.get()))
+        self.button = tkinter.Button(self, text="确定", width=6, command=self.SaveFile)
         self.button.grid(row=2, column=0, pady=5, padx=30, sticky='w', columnspan=2)
         self.button_2 = tkinter.Button(self, text="取消", width=6, command=lambda: self.destroy())
         self.button_2.grid(row=2, column=1, pady=5, padx=30, columnspan=2, sticky='e')
 
-    def upper(self):
-        str = self.contents.get().upper()
-        self.contents.set(str)
-        print('the contents is : ', self.contents.get())
-        # self.destroy()
+    # def upper(self):
+    #     str = self.login_re.get().upper()
+    #     self.login_re.set(str)
+    #     print('the contents is : ', self.login_re.get())
+    #     # self.destroy()
+    #
+    # def print_contents(self, event):
+    #     print("hi. contents of entry is now ---->", self.login_re.get())
 
-    def print_contents(self, event):
-        print("hi. contents of entry is now ---->", self.contents.get())
+    def Encrypted(self):
+        key = 'This_is_My_World!'
 
+        def encrypt(key, content): # key:密钥,content:明文
+            EncryptedData = win32com.client.Dispatch('CAPICOM.EncryptedData')
+            EncryptedData.Algorithm.KeyLength = 5
+            EncryptedData.Algorithm.Name = 2
+            EncryptedData.SetSecret(key)
+            EncryptedData.Content = content
+            return EncryptedData.Encrypt()
+        txt = self.login_re.get()
+        en_login = encrypt(key, self.login_re.get())
+        en_Privileged_pwd = encrypt(key, self.Privileged_pwd_re.get())
 
+        print('加密login：' + en_login)
+        print('解密Privileged：' + en_Privileged_pwd)
 
-    #App(tk).mainloop()
+    def SaveFile(self):
+        '向文件写入输入的密码'
+        if self.login_re.get() == '' and self.Privileged_pwd_re.get() == '':
+            gui_text.insert('end', Dividing + '输入不能为空！\n')
+            gui_text.see('end')
+            return None
+        try:
+            fileopen = open('Config.ini', 'r', encoding='utf-8')
+            files = fileopen.readlines()
+            fileopen.close()
+        except BaseException as err:
+            gui_text.insert('end', '无法打开配置文件，未能成功修改！\n' + str(err))
+        else:
+            try:
+                '''备份副本并打开文件'''
+                shutil.copyfile('Config.ini', 'Config.ini.bak')
+                fileopen = open('Config.ini', 'w', encoding='utf-8')
+                for x in files:
+                    if 'Login_pwd' in x and self.login_re.get() != '':
+                        files[files.index(x)] = 'Login_pwd=%s\n' % str(self.login_re.get())
+                    if 'Privileged_pwd' in x and self.Privileged_pwd_re.get() != '':
+                        files[files.index(x)] = 'Privileged_pwd=%s\n' % str(self.Privileged_pwd_re.get())
+                fileopen.writelines(files)
+                gui_text.insert('end', Dividing + '已修改！\n')
+            except BaseException as err:
+                gui_text.insert('end', '无法写入配置文件！\n' + str(err))
+            else:
+                os.remove('Config.ini.bak')
+            fileopen.close()
+        gui_text.see('end')
+        self.destroy()
 
 def Gui_System_Menu():
+    '生成主菜单栏'
     filemenu = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
     # filemenu.add_command(label='Open')
     filemenu.add_command(label='重新登录到路由', command=Again_Login)
     filemenu.add_command(label='重新读取配置文件', command=Again_Read_Configure)
-    filemenu.add_command(label='修改连接密码', command=lambda: App(root))
+    filemenu.add_command(label='修改连接密码', command=lambda: Gui_ChangePassword(root))
     filemenu.add_separator()
     filemenu.add_command(label='保存日志窗口', command=lambda: save_text(gui_text.get('0.0', 'end'), **save_options))
     filemenu.add_command(label='打印日志窗口', command=Text_input)
     filemenu.add_command(label='清空消息窗口', command=Clear_Text)
     filemenu.add_separator()
     filemenu.add_command(label='退出', command=exit)
-    filemenu.add_command(label='加解密', command=lambda :Encrypted_Decrypt('Encrypted', 'asddsfgdfrrr'))
     Menu_bar.add_cascade(label=' 系统 ', menu=filemenu, font=ch_font)
     save_options = {}
     save_options['defaultextension'] = '.txt'
@@ -461,36 +526,44 @@ def Gui_System_Menu():
             save.write(txt)
             save.close()
         except Exception:
-            gui_text.insert('end', Dividing + '未能成功保存!\n')
+            gui_text.insert('end', Dividing + '未能成功保存！\n')
             gui_text.see('end')
 
 def Gui_Help_Menu():
+    '生成帮助菜单'
     help_menu = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
     Menu_bar.add_cascade(label=' 帮助 ', menu=help_menu, font=ch_font)
 
     def about_frame():
         about = tkinter.Tk()
-        about.geometry('280x340+%d+%d' % (screensize[0]//2 - 140, screensize[1]//2 - 170))
+        about.geometry('280x345+%d+%d' % (screensize[0]//2 - 140, screensize[1]//2 - 170))
         about.title('关于')
         about.propagate(False)
-        about_text_frame = tkinter.Frame(about, width=270, height=300, bg='#696969')
+        about_text_frame = tkinter.Frame(about, width=270, height=310, bg='#696969')
         about_text_frame.propagate(False)
         about_text_frame.pack(side='top')
         about_close = tkinter.Button(about, text='关闭', width=12, command=lambda: about.destroy())
-        about_close.pack()
+        about_close.pack(anchor='s')
         # about.configure(background='#696969')
         # about_text = tkinter.Text(about, font=('Microsoft YaHei', 8), width=210, height=290, bg='#696969', fg='#fffafa')
         # about_text.bind("<KeyPress>", lambda e: "break")
         # about_text.pack()
         # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
-        tkinter.Label(about_text_frame, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 12, 'bold')).pack(anchor='nw')
-        tkinter.Label(about_text_frame, text='\n一个用Python和Tkinter写的Cisco路由表切换工具', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack()
+
+        tkinter.Label(about_text_frame, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 15, 'bold')).pack(anchor='nw')
+        tkinter.Label(about_text_frame, text='V1.0 ISH专用', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack(anchor='nw')
+        tkinter.Label(about_text_frame, text='\n一个用Python和Tkinter写的Cisco路由表切换工具.\n'
+                                             '如遇到bug或异常请发送邮件给作者.', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack()
+        tkinter.Label(about_text_frame, text='%s' % '\n'*6, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='build:%s' % now_time, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='Developer:Sonny Yang', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='Email:klzsysy@live.com; it_yangsy@ish.com.cn', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
     help_menu.add_command(label='关于', command=about_frame)
 
 def Gui_Line_Switch_Menu(*args):
-    ''' 生成/更新链路切换菜单 '''
+    '生成/更新链路切换菜单'
     global line_switch
-    if args:
+    if line_switch:
         line_switch.delete(0, 'end')
     else:
         line_switch = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
@@ -549,12 +622,12 @@ def Gui_Line_Switch_Menu(*args):
     # --------------------------------------------------------------------------------------------------
     x_to_x = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
     line_switch.add_cascade(label='将X路由切换到线路Y', menu=x_to_x, font=ch_font)
-    global x_to_x_menu_dict         # 存储动态变量
-    separator = 1
-    if args:
+    global x_to_x_menu_dict          # 存储动态变量
+    separator = True
+    if x_to_x_menu_dict:
         for y in x_to_x_menu_dict.items():
             y[1].delete('0', 'end')
-        gui_text.insert('end', Dividing + '菜单已刷新！')
+        gui_text.insert('end', Dividing + '菜单已刷新！\n')
     for x1 in Line_Status:
         for x2 in x1:
             x_to_x_menu_dict[x2[-1][5:]] = tkinter.Menu(x_to_x, tearoff=0, font=ch_font)
@@ -571,27 +644,31 @@ def Gui_Line_Switch_Menu(*args):
                 x_to_x_menu_dict[x2[-1][5:]].add_command(label='从路由表删除', command=lambda x1=x1, x2=x2: Input_Command(4, Line_Status.index(x1), x1.index(x2), False))
         if separator:
             x_to_x.add_separator()
-            separator = None
+            separator = False
 
-def Gui_Button_Panel():
+
+def Gui_Button_Panel(Status):
     '生成按钮面板'
-    OptionsMenu = tkinter.Frame(button_frame, width=500, height=120, bg='#FFFAFA')
-    OptionsMenu.propagate(False)
-    OptionsMenu.pack(side='bottom')
-    # boxinfo = tkinter.messagebox.showinfo('标题1', 'this 按钮1')
-    grid = {'padx': 8, 'pady': 4, 'sticky': 'ewns'}
-    tkinter.Button(OptionsMenu, text='显示当前线路状态', width=17, command=Show_Status).grid(row=0, column=0, **grid)
-    tkinter.Button(OptionsMenu, text='显示路由定义', width=17, command=Show_Route_Def).grid(row=0, column=1, **grid)
-    tkinter.Button(OptionsMenu, text='清空已缓存的命令', width=17, command=Cmd_Clear).grid(row=0, column=2,  **grid)
+    # 首先检查是否已经生成过
+    if Status:
+        OptionsMenu = tkinter.Frame(button_frame, width=500, height=120, bg='#FFFAFA')
+        OptionsMenu.propagate(False)
+        OptionsMenu.pack(side='bottom')
+        # boxinfo = tkinter.messagebox.showinfo('标题1', 'this 按钮1')
+        grid = {'padx': 8, 'pady': 4, 'sticky': 'ewns'}
+        tkinter.Button(OptionsMenu, text='显示当前线路状态', width=17, command=Show_Status).grid(row=0, column=0, **grid)
+        tkinter.Button(OptionsMenu, text='显示路由定义', width=17, command=Show_Route_Def).grid(row=0, column=1, **grid)
+        tkinter.Button(OptionsMenu, text='清空已缓存的命令', width=17, command=Cmd_Clear).grid(row=0, column=2,  **grid)
 
-    tkinter.Button(OptionsMenu, text='刷新菜单', width=17, command=lambda: Gui_Line_Switch_Menu(True)).grid(row=1, column=0, **grid)
-    tkinter.Button(OptionsMenu, text='刷新路由状态', width=17, command=lambda: Flush_Route_Status(switch_config_t)).grid(row=1, column=1, **grid)
-    tkinter.Button(OptionsMenu, text='查看已缓存的命令', width=17, command=Show_Cmd).grid(row=1, column=2,  **grid)
+        tkinter.Button(OptionsMenu, text='刷新菜单', width=17, command=lambda: Gui_Line_Switch_Menu(True)).grid(row=1, column=0, **grid)
+        tkinter.Button(OptionsMenu, text='刷新路由状态', width=17, command=lambda: Flush_Route_Status(switch_config_t)).grid(row=1, column=1, **grid)
+        tkinter.Button(OptionsMenu, text='查看已缓存的命令', width=17, command=lambda: Show_Cmd(False)).grid(row=1, column=2,  **grid)
 
-    tkinter.Button(OptionsMenu, text='清空输出信息', width=17, command=Clear_Text).grid(row=2, column=0,  **grid)
-    tkinter.Button(OptionsMenu, text='登出路由并离开', width=17, command=Exit_Switch).grid(row=2, column=1,  **grid)
-    tkinter.Button(OptionsMenu, text='执行命令！', command=Run_Command, width=17, bg='#87CEEB').grid(row=2, column=2,  **grid)
-    # tkinter.Button(OptionsMenu, text='读取配置文件', width=17=23, command=Input_Config).grid(row=2, column=0, padx=1, pady=2)
+        tkinter.Button(OptionsMenu, text='清空输出信息', width=17, command=Clear_Text).grid(row=2, column=0,  **grid)
+        tkinter.Button(OptionsMenu, text='登出路由并离开', width=17, command=Exit_Switch).grid(row=2, column=1,  **grid)
+        tkinter.Button(OptionsMenu, text='执行命令！', command=Run_Command, width=17, bg='#87CEEB').grid(row=2, column=2,  **grid)
+        # tkinter.Button(OptionsMenu, text='读取配置文件', width=17=23, command=Input_Config).grid(row=2, column=0, padx=1, pady=2)
+    return False
 
 
 def Gui_Root_Frame():
@@ -619,11 +696,11 @@ def Gui_Root_Frame():
     return root, button_frame, info_frame, en_font, ch_font, screensize
 
 def Gui_Text_Frame():
-    '''绘制文本框架'''
+    '绘制文本框架'
     gui_text = tkinter.Text(info_frame, width=68, height=30,  bg='#494848', fg='#C3C3C3')
     gui_text.bind("<BackSpace>", lambda e: "break")         # 忽略退格键
-    # gui_text.bind("<KeyPress>", lambda e: "break")
-    # gui_text['state'] = 'normal'
+    # gui_text.bind("<KeyPress>", lambda e: "break")            # 忽略所以键
+    # gui_text['state'] = 'normal'                           # 文本框读写属性
     gui_text.pack(side='left')      # , fill='y'
 
     scrollbar = tkinter.ttk.Scrollbar(info_frame, orient='vertical', command=gui_text.yview)
@@ -638,21 +715,22 @@ def Gui_Menu_Bar():
     return Menubar
 
 if __name__ == '__main__':
+    Panel_Status = True
     root, button_frame, info_frame, en_font, ch_font, screensize = Gui_Root_Frame()         # 构建主窗口
     gui_text = Gui_Text_Frame()                                                             # 生成log框
     Menu_bar = Gui_Menu_Bar()                                                               # 生成菜单栏
     Gui_System_Menu()                                                                       # 生成系统菜单
     if Input_Config():
         if Detect_Localip():                                                                # 检查本机IP与授权
-            sh_run, switch_config_t, link = Login_Route(Gateway)                            # 登录目标
+            sh_run, switch_config_t, link = Login_Route()                                   # 登录目标
             if link:
                 Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
                 Line_241, Line_242, Line_XM = Link_Group(Line_Status)
                 Gui_Line_Switch_Menu()                                                      # 生成链路切换菜单
-                Gui_Button_Panel()                                                          # 生成按钮面板
-                gui_text.insert('0.0', 'Hello World!\n')
+                Panel_Status = Gui_Button_Panel(Panel_Status)                               # 生成按钮面板
+                gui_text.insert('end', '\nHello World！\n')
             else:
-                gui_text.insert('end', '连接路由器失败\n')
+                gui_text.insert('end', '\n\n连接路由器失败 :(\n')
     Gui_Help_Menu()                                                                         # 生成帮助菜单
     root.mainloop()                                                                         # 启动循环
 
