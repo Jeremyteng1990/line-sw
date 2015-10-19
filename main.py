@@ -13,18 +13,17 @@ import tkinter.filedialog
 import ctypes
 import re
 import codecs
-import pyaes
-import win32com.client
 import shutil
 import datetime
+import base64
 # import logging
 # from multiprocessing import Process
 # from multiprocessing.queues import Queue
 # from threading import Thread
 
-No_Online = []          # 配置文件中未活动路由
-Cmd = [[], []]          # 当前缓存命令
-x_to_x_menu_dict = {}   # x_to_x菜单字典
+No_Online = []              # 配置文件中未活动路由
+Cmd = [[], []]              # 当前缓存命令
+x_to_x_menu_dict = {}       # x_to_x菜单字典
 now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 line_switch = None
 Dividing = '\n\n' + '--*--' * 13 + '\n\n'
@@ -54,9 +53,9 @@ def Input_Config():
                 if 'Gateway' in patstr:
                     Gateway = patstr_value
                 elif 'Login_pwd' in patstr:
-                    Login_pwd = patstr_value
+                    Login_pwd = Decrypt(patstr_value)
                 elif 'Privileged_pwd' in patstr:
-                    Privileged_pwd = patstr_value
+                    Privileged_pwd = Decrypt(patstr_value)
                 elif 'VPN_Static_Route' in patstr:
                     Link_Static_Route.append([patstr[patstr.index('=')+1:patstr.index('name')].strip(), patstr[patstr.index('name'):].strip()])
                 elif 'Application_Static_Route' in patstr:
@@ -108,8 +107,7 @@ def Detect_Localip():
         elif '192.168.5' in ip or '10.8.' in ip or '192.168.10' in ip:
             return ip
         else:
-            gui_text.insert('end', Dividing + '您的主机没有被授权使用本软件,无法继续操作！\n如在内网已连接VPN请先断开再试！\n')
-            # tkinter.messagebox.showerror('错误', '您的主机没有被授权使用本软件,无法继续操作！\n如在内网已连接VPN请先断开再试！\n')
+            gui_text.insert('end', Dividing + '您的主机没有被授权使用本软件,无法继续操作！\n如在内网连接了VPN请先断开再试！\n')
             return False
 
 def Line_Detction(sh_run, *args):
@@ -403,14 +401,12 @@ def Again_Read_Configure():
 
 def Decrypt(text):
         '''解密登录密码'''
-        text_3 = str.encode(text)
-        print('原始字符串：%s' % text)
-        key = b"This_key_for_demo_purposes_only~"
-        aes = pyaes.AESModeOfOperationCTR(key)
-        decrypted = aes.decrypt(text_3)
-        decrypted = decrypted.decode()
-        print(decrypted)
-        return decrypted
+        text = text[2:-1]
+        textbyt = str.encode(text)
+        decodestr = base64.b64decode(textbyt)
+        decodestr = decodestr[:-24]
+        decodestr = str(decodestr, encoding='utf-8')
+        return decodestr
 
 class Gui_ChangePassword(tkinter.Frame):
     '绘制修改密码框'
@@ -435,7 +431,7 @@ class Gui_ChangePassword(tkinter.Frame):
         self.Privileged_pwd_re = tkinter.StringVar()
         self.Privileged_pwd.config(textvariable=self.Privileged_pwd_re)
 
-        self.button = tkinter.Button(self, text="确定", width=6, command=self.SaveFile)
+        self.button = tkinter.Button(self, text="确定", width=6, command=self.Encrypted)
         self.button.grid(row=2, column=0, pady=5, padx=30, sticky='w', columnspan=2)
         self.button_2 = tkinter.Button(self, text="取消", width=6, command=lambda: self.destroy())
         self.button_2.grid(row=2, column=1, pady=5, padx=30, columnspan=2, sticky='e')
@@ -450,28 +446,27 @@ class Gui_ChangePassword(tkinter.Frame):
     #     print("hi. contents of entry is now ---->", self.login_re.get())
 
     def Encrypted(self):
-        key = 'This_is_My_World!'
-
-        def encrypt(key, content): # key:密钥,content:明文
-            EncryptedData = win32com.client.Dispatch('CAPICOM.EncryptedData')
-            EncryptedData.Algorithm.KeyLength = 5
-            EncryptedData.Algorithm.Name = 2
-            EncryptedData.SetSecret(key)
-            EncryptedData.Content = content
-            return EncryptedData.Encrypt()
-        txt = self.login_re.get()
-        en_login = encrypt(key, self.login_re.get())
-        en_Privileged_pwd = encrypt(key, self.Privileged_pwd_re.get())
-
-        print('加密login：' + en_login)
-        print('解密Privileged：' + en_Privileged_pwd)
-
-    def SaveFile(self):
-        '向文件写入输入的密码'
+        '加密字符串'
         if self.login_re.get() == '' and self.Privileged_pwd_re.get() == '':
             gui_text.insert('end', Dividing + '输入不能为空！\n')
             gui_text.see('end')
             return None
+        key = b'This_is_My_World!_Python'
+        login_byt = str.encode(self.login_re.get())
+        login_byt += key
+        Privileged_byt = str.encode(self.Privileged_pwd_re.get())
+        Privileged_byt += key
+
+        print(repr(login_byt))
+        print(repr(Privileged_byt))
+
+        self.enlogin = base64.b64encode(login_byt)
+        self.enprivileged = base64.b64encode(Privileged_byt)
+        print(repr(self.enlogin))
+        self.SaveFile()
+
+    def SaveFile(self):
+        '向文件写入输入的密码'
         try:
             fileopen = open('Config.ini', 'r', encoding='utf-8')
             files = fileopen.readlines()
@@ -485,9 +480,9 @@ class Gui_ChangePassword(tkinter.Frame):
                 fileopen = open('Config.ini', 'w', encoding='utf-8')
                 for x in files:
                     if 'Login_pwd' in x and self.login_re.get() != '':
-                        files[files.index(x)] = 'Login_pwd=%s\n' % str(self.login_re.get())
+                        files[files.index(x)] = 'Login_pwd=%s\n' % str(self.enlogin)
                     if 'Privileged_pwd' in x and self.Privileged_pwd_re.get() != '':
-                        files[files.index(x)] = 'Privileged_pwd=%s\n' % str(self.Privileged_pwd_re.get())
+                        files[files.index(x)] = 'Privileged_pwd=%s\n' % str(self.enprivileged)
                 fileopen.writelines(files)
                 gui_text.insert('end', Dividing + '已修改！\n')
             except BaseException as err:
