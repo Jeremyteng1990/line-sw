@@ -16,10 +16,7 @@ import codecs
 import shutil
 import datetime
 import base64
-# import logging
-# from multiprocessing import Process
-# from multiprocessing.queues import Queue
-# from threading import Thread
+import sys
 
 No_Online = []              # 配置文件中未活动路由
 Cmd = [[], []]              # 当前缓存命令
@@ -66,7 +63,6 @@ def Input_Config():
     except Exception as err:
         gui_text.insert('end', Dividing + '读取配置文件失败！\nError Code:%s' % str(err))
         return False
-    gui_text.insert('end', '读取配置文件完成...\n')
     return True
 
 def Login_Route():
@@ -135,7 +131,7 @@ def Line_Detction(sh_run, *args):
     return [Vpn_result, App_result]
 
 def Link_Group(line_status):
-    # readme = [[vpn], [app]]
+    'readme = [[vpn], [app]]'
     line_241 = [[], []]
     line_242 = [[], []]
     line_XM = [[], []]
@@ -273,7 +269,7 @@ def Exit_Switch():
         gui_text.insert('end', Dividing + '与路由断开时出现错误，你可以直接X掉窗口\n' + str(err) + '\n')
         gui_text.see('end')
     finally:
-        exit()
+        sys.exit()
 
 
 def Show_Cmd(args):
@@ -307,7 +303,6 @@ def Cmd_Clear(args=True):
 
 def all_object_menu_box(message, *args):
     '全体对象切换到X --> 切换到241/242网关'
-
     re = tkinter.messagebox.askyesnocancel(title='额外选项', message='是否包含厦门专线10.0.0.6上的%s ?' % message)
     if re is None:
         pass
@@ -404,8 +399,10 @@ def Decrypt(text):
         text = text[2:-1]
         textbyt = str.encode(text)
         decodestr = base64.b64decode(textbyt)
-        decodestr = decodestr[:-24]
-        decodestr = str(decodestr, encoding='utf-8')
+        pw_byt = decodestr[28:]
+        pw = base64.b64decode(pw_byt)
+        pw = base64.b64decode(pw)
+        decodestr = str(pw, encoding='utf-8')
         return decodestr
 
 class Gui_ChangePassword(tkinter.Frame):
@@ -413,9 +410,9 @@ class Gui_ChangePassword(tkinter.Frame):
     def __init__(self, master=None):
         tkinter.Frame.__init__(self, master)
         self.pack()
-        self.Login_pwd = tkinter.Entry(self)
+        self.Login_pwd = tkinter.Entry(self, show='*')
         self.Login_pwd.grid(row=0, column=1, pady=3)
-        self.Privileged_pwd = tkinter.Entry(self)
+        self.Privileged_pwd = tkinter.Entry(self, show='*')
         self.Privileged_pwd.grid(row=1, column=1, pady=3)
 
         self.login_lab = tkinter.Label(self, text='登录密码')
@@ -446,23 +443,27 @@ class Gui_ChangePassword(tkinter.Frame):
     #     print("hi. contents of entry is now ---->", self.login_re.get())
 
     def Encrypted(self):
-        '加密字符串'
+        '简单加密字符串'
         if self.login_re.get() == '' and self.Privileged_pwd_re.get() == '':
             gui_text.insert('end', Dividing + '输入不能为空！\n')
             gui_text.see('end')
             return None
-        key = b'This_is_My_World!_Python'
+        key = b'ishshntiszishshishizd'
+        enkey = base64.b64encode(key)
         login_byt = str.encode(self.login_re.get())
-        login_byt += key
         Privileged_byt = str.encode(self.Privileged_pwd_re.get())
-        Privileged_byt += key
 
-        print(repr(login_byt))
-        print(repr(Privileged_byt))
+        enlogin = base64.b64encode(login_byt)
+        enprivileged = base64.b64encode(Privileged_byt)
+        enlogin = base64.b64encode(enlogin)
+        enprivileged = base64.b64encode(enprivileged)
 
-        self.enlogin = base64.b64encode(login_byt)
-        self.enprivileged = base64.b64encode(Privileged_byt)
-        print(repr(self.enlogin))
+        enlogin = enkey + enlogin
+        enprivileged = enkey + enprivileged
+
+        self.en_login_save = base64.b64encode(enlogin)
+        self.enprivileged_save = base64.b64encode(enprivileged)
+
         self.SaveFile()
 
     def SaveFile(self):
@@ -480,9 +481,9 @@ class Gui_ChangePassword(tkinter.Frame):
                 fileopen = open('Config.ini', 'w', encoding='utf-8')
                 for x in files:
                     if 'Login_pwd' in x and self.login_re.get() != '':
-                        files[files.index(x)] = 'Login_pwd=%s\n' % str(self.enlogin)
+                        files[files.index(x)] = 'Login_pwd=%s\n' % str(self.en_login_save)
                     if 'Privileged_pwd' in x and self.Privileged_pwd_re.get() != '':
-                        files[files.index(x)] = 'Privileged_pwd=%s\n' % str(self.enprivileged)
+                        files[files.index(x)] = 'Privileged_pwd=%s\n' % str(self.enprivileged_save)
                 fileopen.writelines(files)
                 gui_text.insert('end', Dividing + '已修改！\n')
             except BaseException as err:
@@ -502,10 +503,10 @@ def Gui_System_Menu():
     filemenu.add_command(label='修改连接密码', command=lambda: Gui_ChangePassword(root))
     filemenu.add_separator()
     filemenu.add_command(label='保存日志窗口', command=lambda: save_text(gui_text.get('0.0', 'end'), **save_options))
-    filemenu.add_command(label='打印日志窗口', command=Text_input)
+    # filemenu.add_command(label='打印日志窗口', command=Text_input)
     filemenu.add_command(label='清空消息窗口', command=Clear_Text)
     filemenu.add_separator()
-    filemenu.add_command(label='退出', command=exit)
+    filemenu.add_command(label=' 退出 ', command=lambda: sys.exit())
     Menu_bar.add_cascade(label=' 系统 ', menu=filemenu, font=ch_font)
     save_options = {}
     save_options['defaultextension'] = '.txt'
@@ -524,36 +525,7 @@ def Gui_System_Menu():
             gui_text.insert('end', Dividing + '未能成功保存！\n')
             gui_text.see('end')
 
-def Gui_Help_Menu():
-    '生成帮助菜单'
-    help_menu = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
-    Menu_bar.add_cascade(label=' 帮助 ', menu=help_menu, font=ch_font)
 
-    def about_frame():
-        about = tkinter.Tk()
-        about.geometry('280x345+%d+%d' % (screensize[0]//2 - 140, screensize[1]//2 - 170))
-        about.title('关于')
-        about.propagate(False)
-        about_text_frame = tkinter.Frame(about, width=270, height=310, bg='#696969')
-        about_text_frame.propagate(False)
-        about_text_frame.pack(side='top')
-        about_close = tkinter.Button(about, text='关闭', width=12, command=lambda: about.destroy())
-        about_close.pack(anchor='s')
-        # about.configure(background='#696969')
-        # about_text = tkinter.Text(about, font=('Microsoft YaHei', 8), width=210, height=290, bg='#696969', fg='#fffafa')
-        # about_text.bind("<KeyPress>", lambda e: "break")
-        # about_text.pack()
-        # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
-
-        tkinter.Label(about_text_frame, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 15, 'bold')).pack(anchor='nw')
-        tkinter.Label(about_text_frame, text='V1.0 ISH专用', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack(anchor='nw')
-        tkinter.Label(about_text_frame, text='\n一个用Python和Tkinter写的Cisco路由表切换工具.\n'
-                                             '如遇到bug或异常请发送邮件给作者.', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack()
-        tkinter.Label(about_text_frame, text='%s' % '\n'*6, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
-        tkinter.Label(about_text_frame, text='build:%s' % now_time, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
-        tkinter.Label(about_text_frame, text='Developer:Sonny Yang', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
-        tkinter.Label(about_text_frame, text='Email:klzsysy@live.com; it_yangsy@ish.com.cn', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
-    help_menu.add_command(label='关于', command=about_frame)
 
 def Gui_Line_Switch_Menu(*args):
     '生成/更新链路切换菜单'
@@ -623,6 +595,7 @@ def Gui_Line_Switch_Menu(*args):
         for y in x_to_x_menu_dict.items():
             y[1].delete('0', 'end')
         gui_text.insert('end', Dividing + '菜单已刷新！\n')
+        gui_text.see('end')
     for x1 in Line_Status:
         for x2 in x1:
             x_to_x_menu_dict[x2[-1][5:]] = tkinter.Menu(x_to_x, tearoff=0, font=ch_font)
@@ -673,7 +646,7 @@ def Gui_Root_Frame():
     screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
     # GUI框架
     root = tkinter.Tk()
-    # root.geometry('0x0+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
+    # root.geometry('500x600+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
     root.title('Fast Switch Route')
     root.resizable(width=False, height=True)
     # top_info_frame = tkinter.Frame(root, width=500, height=30, bg='green')
@@ -702,6 +675,56 @@ def Gui_Text_Frame():
     scrollbar.pack(side='right', fill='y')
     gui_text['yscrollcommand'] = scrollbar.set
     return gui_text
+
+def Gui_Help_Menu():
+    '生成帮助菜单'
+    help_menu = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
+    Menu_bar.add_cascade(label='  帮助  ', menu=help_menu, font=ch_font)
+
+    def about_frame():
+        about = tkinter.Tk()
+        about.geometry('280x345+%d+%d' % (screensize[0]//2 - 140, screensize[1]//2 - 170))
+        about.resizable(width=False, height=False)
+        about.title('关于')
+        about.propagate(False)
+        about_text_frame = tkinter.Frame(about, width=270, height=310, bg='#696969')
+        about_text_frame.propagate(False)
+        about_text_frame.pack(side='top')
+        about_close = tkinter.Button(about, text='关闭', width=12, command=lambda: about.destroy())
+        about_close.pack(anchor='s')
+        # about.configure(background='#696969')
+        # about_text = tkinter.Text(about, font=('Microsoft YaHei', 8), width=210, height=290, bg='#696969', fg='#fffafa')
+        # about_text.bind("<KeyPress>", lambda e: "break")
+        # about_text.pack()
+        # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
+        tkinter.Label(about_text_frame, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 15, 'bold')).pack(anchor='nw')
+        tkinter.Label(about_text_frame, text='V1.0 ISH专用', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack(anchor='nw')
+        tkinter.Label(about_text_frame, text='\n一个用Python和Tkinter写的Cisco路由表切换工具\n'
+                                             '如遇到bug或异常请发送邮件给作者.', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='w')
+        tkinter.Label(about_text_frame, text='%s' % '\n'*6, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='build:%s' % now_time, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='Developer:Sonny Yang', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='Email:klzsysy@live.com; it_yangsy@ish.com.cn', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+
+    def readme_frame():
+        readme = tkinter.Tk()
+        readme.resizable(width=False, height=False)
+        readme.title('定义说明')
+        readme.propagate(False)
+        readme.geometry('510x316+%d+%d' % (screensize[0]//2 - 140, screensize[1]//2 - 170))
+        readme_text = tkinter.Text(readme, width=62, height=14,  bg='#494848', fg='#C3C3C3', font=('Microsoft YaHei', 10))
+        readme_text.propagate(False)
+        readme_text.pack()
+        readme_text.bind("<BackSpace>", lambda e: "break")
+        readme_text.insert('end', '<线路切换>菜单中的<全体对象>是指在配置文件中已定义且在路由运行的路由，点击<显示当前线路状态>即可查看配置文件中定义路由的运行状态.\n')
+        readme_text.insert('end', '\n全体VPN是指在配置文件中<VPN_Static_Route>所对应的所有路由,\n\n全体APP指的是配置文件中<Application_Static_Route>所有对应的路由.\n')
+        readme_text.insert('end', '\n所有路由操作只有在点击执行命令之后才会实际操作路由器.\n\n修改连接密码是指本工具连接到路由的密码，而非修改路由器的密码.\n')
+        readme_text.insert('end', '\n菜单中的<将X路由切换到线路Y>适用于操作单条路由表,菜单会在执行命令后自动刷新\n')
+        readme_text.insert('end', '\n菜单中的241, 242, 0.6 分别对应10.8.10.241, 10.8.10.242, 10.0.0.6')
+        tkinter.Button(readme, text='大概看懂了', width=12, command=lambda: readme.destroy()).pack(side='bottom', pady=5)
+
+    help_menu.add_command(label='说明', command=readme_frame)
+    help_menu.add_command(label='关于', command=about_frame)
 
 def Gui_Menu_Bar():
     '''生成菜单栏'''
@@ -737,27 +760,3 @@ if __name__ == '__main__':
     # box2.pack(side='left', fill='y')
     # box = tkinter.Message(SystemMenu,text='message' * 20,width=390,bg='red')
     # box.pack(anchor='nw')
-
-    # class PopUp(tkinter.Toplevel):
-    #     def __init__(self, value):
-    #         tkinter.Toplevel.__init__(self)
-    #         self.value = tkinter.StringVar()
-    #         tkinter.Label(self, text='返回名字').pack()
-    #         tkinter.Entry(self, textvariable=self.value).pack()
-    #         tkinter.Button(self, text='enter', command=lambda: self.callback(value)).pack()
-    #
-    #     def callback(self, value):
-    #         value.append(self.value.get())
-    #         self.destroy()
-    #
-    # class Pwd_gui():
-    #     def __init__(self,root):
-    #         self.root = root
-    #         self.root.geometry('250x100+%d+%d' % (screensize[0]//2 - 100, screensize[1]//2 - 50))
-    #         self.value = []
-    #         tkinter.Button(root, text='pop_up', bg='yellow', command=lambda: self.callback_1()).pack(expand='yes')
-    #         #tkinter.Button(root,text='print',command=lambda: self.callback_2()).pack(expand='yes')
-    #     def callback_1(self):
-    #             App(self,root)
-    #     def callback_2(self):
-    #           print(str(self.value))
