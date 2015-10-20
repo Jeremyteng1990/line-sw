@@ -18,14 +18,13 @@ import datetime
 import base64
 import sys
 
-No_Online = []              # 配置文件中未活动路由
 Cmd = [[], []]              # 当前缓存命令
 x_to_x_menu_dict = {}       # x_to_x菜单字典
 now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 line_switch = None
 Dividing = '\n\n' + '--*--' * 13 + '\n\n'
-VPN_Link = ['10.8.10.241', '10.8.10.242', '10.0.0.6']
-
+VPN_Link_Common = ['10.8.10.241', '10.8.10.242', '10.8.10.238']
+VPN_Link_Extra = ['10.0.0.6']
 
 def Input_Config():
     '读取配置文件并组成列表'
@@ -132,22 +131,25 @@ def Line_Detction(sh_run, *args):
 
 def Link_Group(line_status):
     'readme = [[vpn], [app]]'
-    line_241 = [[], []]
-    line_242 = [[], []]
-    line_XM = [[], []]
+    No_Online = []
+    line_common = {}
+    line_extra = {}
+    for x in VPN_Link_Common:
+        line_common[x] = [[], []]
+    for x in VPN_Link_Extra:
+        line_extra[x] = [[], []]
+    count = 0
     for group in line_status:
         for line in group:
-            if line[1] == VPN_Link[0]:
-                line_241[line_status.index(group)].append([line[0], line[-1]])
-            elif line[1] == VPN_Link[1]:
-                line_242[line_status.index(group)].append([line[0], line[-1]])
-            elif line[1] == VPN_Link[2]:
-                line_XM[line_status.index(group)].append([line[0], line[-1]])
+            if line[1] in VPN_Link_Common:
+                line_common[line[1]][count].append([line[0], line[-1]])
+            elif line[1] in VPN_Link_Extra:
+                line_extra[line[1]][count].append([line[0], line[-1]])
             else:
-                global No_Online
                 No_Online.append(line[0] + ' ' + line[-1])
-                # print('%s 当前不存在！' % line[0])
-    return line_241, line_242, line_XM
+                print('%s 当前不存在！' % line[0])
+        count = 1
+    return line_common, line_extra, No_Online
 
 
 def Link_Switching(options, *args):
@@ -743,7 +745,7 @@ if __name__ == '__main__':
             sh_run, switch_config_t, link = Login_Route()                                   # 登录目标
             if link:
                 Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
-                Line_241, Line_242, Line_XM = Link_Group(Line_Status)
+                Line_Common, Line_Extra, No_Online = Link_Group(Line_Status)
                 Gui_Line_Switch_Menu()                                                      # 生成链路切换菜单
                 Panel_Status = Gui_Button_Panel(Panel_Status)                               # 生成按钮面板
                 gui_text.insert('end', '\nHello World！\n')
