@@ -100,7 +100,7 @@ def Detect_Localip():
         if ip == '127.0.0.1':
             gui_text.insert('end', Dividing + '无法获得有效的本机IP！\n')
             return False
-        elif '192.168.5' in ip or '10.8.' in ip or '192.168.10' in ip:
+        elif '192.168.5' in ip or '10.8.' in ip:
             return ip
         else:
             gui_text.insert('end', Dividing + '您的主机没有被授权使用本软件,无法继续操作！\n如在内网连接了VPN请先断开再试！\n')
@@ -647,7 +647,7 @@ def Gui_Root_Frame():
     # GUI框架
     root = tkinter.Tk()
     # root.geometry('500x600+%d+%d' % (screensize[0]//2 - 250, screensize[1]//2 - 300))
-    root.title('Fast Switch Route')
+    root.title('Fast Route Switch ')
     root.resizable(width=False, height=True)
     # top_info_frame = tkinter.Frame(root, width=500, height=30, bg='green')
     # top_info_frame.propagate(False)
@@ -698,11 +698,11 @@ def Gui_Help_Menu():
         # about_text.pack()
         # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
         tkinter.Label(about_text_frame, text='\nFast Switch Route', fg='#fffafa', bg='#696969', font=('Helvetica', 15, 'bold')).pack(anchor='nw')
-        tkinter.Label(about_text_frame, text='V1.0 ISH专用', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack(anchor='nw')
+        tkinter.Label(about_text_frame, text='V0.1 ISH专用', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack(anchor='nw')
         tkinter.Label(about_text_frame, text='\n一个用Python和Tkinter写的Cisco路由表切换工具\n'
                                              '如遇到bug或异常请发送邮件给作者.', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='w')
         tkinter.Label(about_text_frame, text='%s' % '\n'*6, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
-        tkinter.Label(about_text_frame, text='build:%s' % now_time, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='build:2015-10-20 16:40:59', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
         tkinter.Label(about_text_frame, text='Developer:Sonny Yang', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
         tkinter.Label(about_text_frame, text='Email:klzsysy@live.com; it_yangsy@ish.com.cn', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
 
