@@ -32,6 +32,7 @@ def Input_Config():
     Link_Static_Route, Application_Static_Route = [], []
     gateway_regular = 'Gateway=( )?(\d{1,3}.){3}\d{1,3}\s'
     Login_regular = 'Login_pwd=( )?\S*\s'
+    vpn_link_common_regular = 'VPN_Link_Common=\s*(\d[0-255]{1,3}.'
     privileged_regular = 'Privileged_pwd=( )?\S*\s'
     vsr_regular = 'VPN_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
     asr_regular = 'Application_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
@@ -131,115 +132,77 @@ def Line_Detction(sh_run, *args):
 
 def Link_Group(line_status):
     'readme = [[vpn], [app]]'
-    No_Online = []
+    No_Online = {}
     line_common = {}
-    line_extra = {}
+    # line_extra = {}
     for x in VPN_Link_Common:
-        if x not in VPN_Link_Extra:
-            line_common[x] = [[], []]
-    for x in VPN_Link_Extra:
-        line_extra[x] = [[], []]
+        line_common[x] = [[], []]
+    # for x in VPN_Link_Extra:
+    #     line_extra[x] = [[], []]
     count = 0
     for group in line_status:
         for line in group:
-            if line[1] in VPN_Link_Common and line[1] not in VPN_Link_Extra:
-                line_common[line[1]][count].append([line[0], line[-1]])
-            elif line[1] in VPN_Link_Extra:
-                line_extra[line[1]][count].append([line[0], line[-1]])
+            if line[1] in VPN_Link_Common:
+                line_common[line[1]][count].append([line[0], line[1], line[-1]])
+            # elif line[1] in VPN_Link_Extra:
+            #     line_extra[line[1]][count].append([line[0], line[-1]])
             else:
-                No_Online.append(line[0] + ' ' + line[-1])
+                No_Online[line[1]] = [line[0], line[1], line[-1]]
                 print('%s 当前不存在！' % line[0])
         count = 1
-    return line_common, line_extra, No_Online
+    return line_common, No_Online
 
 
-def Link_Switching(options, re, Line_Common, Line_Extra, No_Online):
+def Link_Switching(options, re, Line_set, No_Online):
     '生成最终路由指令'
     global Cmd
     a, b, c, d = options[0], options[1], options[2], options[3]
-    if d:
-        xm = False
-    else:
-        xm = True
+
     def check_command(command):
         '过滤重复或者肯能产生冲突的命令'
-        for x in Cmd:
-            for route in x:
-                if command in route:
-                    gui_text.insert('end', '\n移除重复或冲突缓存:\n' + Cmd[Cmd.index(x)].pop(x.index(route)) + '\n')
+        if Cmd != [[], []]:
+            for x in Cmd:
+                for route in x:
+                    if command in route:
+                        gui_text.insert('end', '\n移除重复或冲突缓存:\n' + Cmd[Cmd.index(x)].pop(x.index(route)) + '\n')
 
-    if Cmd != [[], []]:
-        gui_text.insert('end', Dividing + '检查命令冲突...\n')
+    def build_command(sources, target=None):
+        if not re.get(sources[1], True):                                # 判断是否排除
+            return None
+        check_command(sources[0])                                        # 检查命令重复或冲突
+        # 如果当前路由的下一跳不是要切换的目标 也不为空 同时target也不为空
+        if sources[1] != target and sources[1] is not None and target is not None:
+            Cmd[0].append('no ' + sources[0] + ' ' + sources[1])
+            Cmd[1].append(sources[0] + ' ' + target + ' ' + sources[-1])
+        elif sources[1] is None:
+            Cmd[1].append(sources[0] + ' ' + target + ' ' + sources[-1])
+        elif target is None:
+            Cmd[0].append('no ' + sources[0] + ' ' + sources[1])
+
     if a == 1:
         for x in Line_Status:
             for xx in x:
-                check_command(xx[0])
-                if xx[1] != b and xx[1] is not None:
-                    Cmd[0].append('no ' + xx[0] + ' ' + b)
-                    Cmd[1].append(xx[0] + ' ' + b + ' ' + xx[-1])
-                if xx[1] is None:
-                    Cmd[1].append(xx[0] + ' ' + b + ' ' + xx[-1])
-
-    # if a == 1:                                            # 全体切换到241/242
-    #     target_line = b - 1
-    #     for gw in args:
-    #         if args.index(gw) == target_line:
-    #             '''路由条目已在目标网关依然要检测缓存的命令'''
-    #             for check in gw:
-    #                 for check_2 in check:
-    #                     check_command(check_2[0])
-    #             continue
-    #         for group in gw:
-    #             for iproute in group:
-    #                 check_command(iproute[0])
-    #                 Cmd[0].append('no ' + iproute[0] + ' ' + VPN_Link[args.index(gw)])
-    #                 Cmd[1].append(iproute[0] + ' ' + VPN_Link[target_line] + ' ' + iproute[-1])
-    #         if xm:
-    #             break
+                build_command(xx, b)
     elif a == 2:                                          # vpn/app 切换到 241/242
-        sources_type = b - 1
-        target_line = c - 1
-        for gw in args:
-            if args.index(gw) == target_line:
-                for check in gw[sources_type]:        # 路由条目已在目标网关依然要检测缓存的命令
-                    for check_2 in check:
-                        check_command(check_2[0])
-                continue
-            for group in gw[sources_type]:
-                check_command(group[0])
-                Cmd[0].append('no ' + group[0] + ' ' + VPN_Link[args.index(gw)])
-                Cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
-            if xm:
-                break
+        for x in Line_Status[b]:
+            build_command(x, c)
     elif a == 3:                                        # 位于X的Y切换到Z
-        sources_line = b - 1
-        if c is 1 or c is 2:
-            aa = c - 1
+        if c < 2:
+            for x in Line_set[b][c]:
+                build_command(x, d)
         else:
-            aa = 0
-        target_line = d - 1
-        for gw in args[sources_line][aa:c]:
-            for group in gw:
-                check_command(group[0])
-                Cmd[0].append('no ' + group[0] + ' ' + VPN_Link[sources_line])
-                Cmd[1].append(group[0] + ' ' + VPN_Link[target_line] + ' ' + group[-1])
-
+            for x in Line_set[b]:
+                for xx in x:
+                    build_command(xx, d)
     elif a == 4:                                        # 将线路X 切换到出口Y
-        x = True
-        if Line_Status[b][c][1]:
-            check_command(Line_Status[b][c][0])
-            Cmd[0].append('no ' + Line_Status[b][c][0] + ' ' + Line_Status[b][c][1])
-            x = False
-        if d is False:
-            return None
-        if x:
-            check_command(Line_Status[b][c][0])
-        Cmd[1].append(Line_Status[b][c][0] + ' ' + VPN_Link[d] + ' ' + Line_Status[b][c][-1])
-
+        if d is True:
+            build_command(Line_Status[b][c])
+        else:
+            build_command(Line_Status[b][c], target=d)
 
 def Run_Command():
     '执行命令'
-    global Line_241, Line_242, Line_XM
+    global Line_Set, No_Online
     if len(Cmd[0]) == 0 and len(Cmd[1]) == 0:
         gui_text.insert('end', Dividing + '当前无缓存的命令！\n')
     else:
@@ -253,7 +216,7 @@ def Run_Command():
             gui_text.insert('end', Dividing + '命令已执行完毕！')
             Flush_Route_Status(switch_config_t)                     # 刷新状态
             Gui_Line_Switch_Menu(True)                             # 刷新菜单
-            Line_241, Line_242, Line_XM = Link_Group(Line_Status)    # 刷新链路组
+            Line_Set, No_Online = Link_Group(Line_Status)           # 刷新链路组
             Cmd_Clear(False)                                        # 清空命令
     gui_text.see('end')
 
@@ -297,6 +260,7 @@ def Show_Cmd(args):
         for x in Cmd:
             for xx in x:
                 gui_text.insert('end', xx+'\n')
+        gui_text.insert('end', Dividing)
     else:
         gui_text.insert('end',  Dividing + text_show[1])
     gui_text.see('end')
@@ -311,22 +275,17 @@ def Cmd_Clear(args=True):
     gui_text.see('end')
 
 
-def Input_Command(message=None, *args):
+def Input_Command(*args, message=None):
     '组合参数'
     re = {}
-    for x in VPN_Link_Extra:
-        re[x] = tkinter.messagebox.askyesnocancel(title='额外选项', message='是否包含线路%s上的%s ?' % (x, message))
+    if args[0] < 3:
+        for x in VPN_Link_Extra:
+            re[x] = tkinter.messagebox.askyesnocancel(title='额外选项', message='是否包含线路%s上的%s ?' % (x, message))
+            if re[x] is None:
+                return None
+    Link_Switching(args, re, Line_Set, No_Online)
+    Show_Cmd(True)
 
-    if re is None:
-        pass
-    else:
-        Link_Switching(args, re, Line_Common, Line_Extra, No_Online)
-        Show_Cmd(True)
-
-
-# def Input_Command(*args):
-#         Link_Switching([args[0], args[1], args[2], args[3]], Line_Common, Line_Extra, No_Online)
-#         Show_Cmd(True)
 
 def Show_Status():
     '显示当前线路状态'
@@ -381,7 +340,7 @@ def Again_Login():
 
 def Again_Read_Configure():
     '重新读取配置并重新登录目标'
-    global Line_Status, Line_241, Line_242, Line_XM, Gateway, switch_config_t, sh_run
+    global Line_Status, Line_Set, No_Online, Gateway, switch_config_t, sh_run
     gui_text.insert('end', Dividing)
     try:
         switch_config_t.disconnect()
@@ -393,7 +352,7 @@ def Again_Read_Configure():
         sh_run, switch_config_t, status = Login_Route()                                           # 连接目标
         if status:
             Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)        # 刷新线路状态信息
-            Line_241, Line_242, Line_XM = Link_Group(Line_Status)                                   # 刷新变量
+            Line_Set, No_Online = Link_Group(Line_Status)                                   # 刷新变量
             Flush_Route_Status(switch_config_t)                                                     # 刷新路由show run
             Gui_Line_Switch_Menu()                                                                  # 刷新菜单
             Gui_Button_Panel(Panel_Status)                                                          # 尝试生成面板
@@ -457,7 +416,7 @@ class Gui_ChangePassword(tkinter.Frame):
 
     def Encrypted(self):
         '简单加密字符串'
-        if self.login_re.get() == '' and self.Privileged_pwd_re.get() == '':
+        if self.login_re.get() == '' or self.Privileged_pwd_re.get() == '':
             gui_text.insert('end', Dividing + '输入不能为空！\n')
             gui_text.see('end')
             return None
@@ -562,17 +521,12 @@ def Gui_Line_Switch_Menu(*args):
             # x = x
             if x in VPN_Link_Extra:
                 continue
-            all_object_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command('对象', 1, x, None))
-            # （message,type,target,None)
-            all_vpn_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command('VPN线路', 2, 1, x))
-            all_app_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command('APP线路', 2, 2, x))
+            all_object_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(1, x, None, None, message='对象'))
+            # （type,target,None, message)
+            all_vpn_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(2, 0, x, None, message='VPN线路'))
+            all_app_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(2, 1, x, None,  message='APP线路'))
         line_switch.add_separator()
 
-        # all_object_menu.add_command(label='-->241网关', command=lambda: all_object_menu_box('对象', 1, 1, None))
-        # all_object_menu.add_command(label='-->242网关', command=lambda: all_object_menu_box('对象', 1, 2, None))
-
-        # all_app_menu.add_command(label='-->242网关', command=lambda: all_object_menu_box('APP线路', 2, 2, 2))
-        # all_vpn_menu.add_command(label='-->242网关', command=lambda : all_object_menu_box('VPN线路', 2, 1, x))
     # -----------------------------------------------------------------------------------------------------
         line_to_x_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font, bg='#d2d2d2')
         line_switch.add_cascade(label='位于线路X的VPN/APP切换到Y', menu=line_to_x_menu, font=ch_font)
@@ -589,21 +543,21 @@ def Gui_Line_Switch_Menu(*args):
             for_line_menu[x].add_cascade(label='的VPN', menu=for_line_menu_vpn[x], font=ch_font)
 
             for_line_menu_app[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
-            for_line_menu[x].add_cascade(label='的APP', menu=for_line_menu_vpn[x], font=ch_font)
+            for_line_menu[x].add_cascade(label='的APP', menu=for_line_menu_app[x], font=ch_font)
 
             for_line_menu_all[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
-            for_line_menu[x].add_cascade(label='的所有路由', menu=for_line_menu_vpn[x], font=ch_font)
+            for_line_menu[x].add_cascade(label='的所有路由', menu=for_line_menu_all[x], font=ch_font)
 
             for y in VPN_Link_Common:
                 # 生成切换到X.X.X.X ，如果已经处于X线路就跳过生成X的菜单，同时排除VPN_Link_Extra
                 if x == y or y in VPN_Link_Extra:
                     continue
-                # 将位于241的VPN路由切换到242
-                for_line_menu_vpn[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 1, y))
+                # 将位于241的VPN路由切换到242                                                （type,sources, type, target)
+                for_line_menu_vpn[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 0, y))
                 # 将位于241的app路由切换到242
-                for_line_menu_app[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 2, y))
+                for_line_menu_app[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 1, y))
                 # 将位于241的所有路由切换到242
-                for_line_menu_all[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 3, y))
+                for_line_menu_all[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 2, y))
         line_switch.add_separator()
 
     # --------------------------------------------------------------------------------------------------
@@ -627,35 +581,13 @@ def Gui_Line_Switch_Menu(*args):
             for x2 in VPN_Link_Common:
                 if xx[1] != x2:
                     x_to_x_dict[temp_name].add_command(label='%s%s' % (strs, x2), command=lambda x2=x2, xx=xx, x=x:
-                    Input_Command(4, Line_Status.index(x), x[xx], x2))
+                    Input_Command(4, Line_Status.index(x), x.index(xx), x2))
+                    # (type, index[1], index[index[1]], target)
             if xx[1] in VPN_Link_Common:
-                x_to_x_dict[temp_name].add_command(label='从路由表删除', command=lambda x=x, xx=xx: Input_Command(4, Line_Status.index(x), x.index(xx), False))
+                x_to_x_dict[temp_name].add_command(label='从路由表删除', command=lambda x=x, xx=xx: Input_Command(4, Line_Status.index(x), x.index(xx), None))
         if separator:
             x_to_x.add_separator()
             separator = False
-    # if x_to_x_menu_dict:
-    #     for y in x_to_x_menu_dict.items():
-    #         y[1].delete('0', 'end')
-    #     gui_text.insert('end', Dividing + '菜单已刷新！\n')
-    #     gui_text.see('end')
-    # for x1 in Line_Status:
-    #     for x2 in x1:
-    #         x_to_x_menu_dict[x2[-1][5:]] = tkinter.Menu(x_to_x, tearoff=0, font=ch_font)
-    #         x_to_x.add_cascade(label=x2[-1][5:], menu=x_to_x_menu_dict[x2[-1][5:]], font=ch_font)
-    #         if x2[1] in VPN_Link:
-    #             str = '切换到'
-    #         else:
-    #              str = '添加到'
-    #         for x3 in VPN_Link:
-    #             if x2[1] != x3:
-    #                 # command=lambda x3=x3 , x1=x1, x2=x2: Input_Command   创建当前循环的快照
-    #                 x_to_x_menu_dict[x2[-1][5:]].add_command(label='%s%s' % (str, x3), command=lambda x3=x3 , x1=x1, x2=x2: Input_Command(4, Line_Status.index(x1), x1.index(x2), VPN_Link.index(x3)))
-    #         if x2[1] in VPN_Link:
-    #             x_to_x_menu_dict[x2[-1][5:]].add_command(label='从路由表删除', command=lambda x1=x1, x2=x2: Input_Command(4, Line_Status.index(x1), x1.index(x2), False))
-    #     if separator:
-    #         x_to_x.add_separator()
-    #         separator = False
-
 
 def Gui_Button_Panel(Status):
     '生成按钮面板'
@@ -785,7 +717,7 @@ if __name__ == '__main__':
             sh_run, switch_config_t, link = Login_Route()                                   # 登录目标
             if link:
                 Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
-                Line_Common, Line_Extra, No_Online = Link_Group(Line_Status)
+                Line_Set, No_Online = Link_Group(Line_Status)
                 Gui_Line_Switch_Menu()                                                      # 生成链路切换菜单
                 Panel_Status = Gui_Button_Panel(Panel_Status)                               # 生成按钮面板
                 gui_text.insert('end', '\nHello World！\n')
