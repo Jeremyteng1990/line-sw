@@ -17,25 +17,27 @@ import shutil
 import datetime
 import base64
 import sys
+import configparser
 
 Cmd = [[], []]              # 当前缓存命令
 now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 line_switch = None
 x_to_x_dict = {}
 Dividing = '\n\n' + '--*--' * 13 + '\n\n'
-VPN_Link_Common = ['10.8.10.241', '10.8.10.242', '10.8.10.238', '10.0.0.6']
-VPN_Link_Extra = ['10.0.0.6']
+
 
 def Input_Config():
     '读取配置文件并组成列表'
-    global Link_Static_Route, Application_Static_Route, Gateway, Login_pwd, Privileged_pwd
+    global Link_Static_Route, Application_Static_Route, Gateway_Total, Connect_Config
     Link_Static_Route, Application_Static_Route = [], []
+    Gateway_Total = {'VPN_Link_Common': [], 'VPN_Link_Extra': []}
+    Connect_Config = {}
     gateway_regular = 'Gateway=( )?(\d{1,3}.){3}\d{1,3}\s'
     Login_regular = 'Login_pwd=( )?\S*\s'
-    vpn_link_common_regular = 'VPN_Link_Common=\s*(\d[0-255]{1,3}.'
-    privileged_regular = 'Privileged_pwd=( )?\S*\s'
-    vsr_regular = 'VPN_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
-    asr_regular = 'Application_Static_Route=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
+    vpn_link_common_regular = 'VPN_Link_Common\s*=\s*((2[0-4]\d|25[0-5]|[01]?\d\d?).){3}(2[0-4]\d|25[0-5]|[01]?\d\d?)'
+    privileged_regular = 'Privileged_pwd\s*=( )?\S*\s'
+    vsr_regular = 'VPN_Static_Route\s*=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
+    asr_regular = 'Application_Static_Route\s*=\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*'
     pattern = gateway_regular + '|' + Login_regular + '|' + privileged_regular + '|' + vsr_regular + '|' + asr_regular
     # pattern = '\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*name*.*|\[.*\]|(\d{1,3}.){3}\d{1,3}'
     # |\s*ip\s+route\s+(\d{1,3}.){3}\d{1,3}\s+(\d{1,3}.){3}\d{1,3}\s*   匹配无注释
@@ -47,12 +49,12 @@ def Input_Config():
                 patstr = pattern_re.group()
                 patstr_value = patstr[patstr.index('=')+1:].strip()
                 # print(patstr.strip())
-                if 'Gateway' in patstr:
-                    Gateway = patstr_value
+                if 'Route' in patstr:
+                    Connect_Config['Route'] = patstr_value
                 elif 'Login_pwd' in patstr:
-                    Login_pwd = Decrypt(patstr_value)
+                    Connect_Config['Login_pwd'] = Decrypt(patstr_value)
                 elif 'Privileged_pwd' in patstr:
-                    Privileged_pwd = Decrypt(patstr_value)
+                    Connect_Config['Privileged_pwd'] = Decrypt(patstr_value)
                 elif 'VPN_Static_Route' in patstr:
                     Link_Static_Route.append([patstr[patstr.index('=')+1:patstr.index('name')].strip(), patstr[patstr.index('name'):].strip()])
                 elif 'Application_Static_Route' in patstr:
@@ -65,14 +67,61 @@ def Input_Config():
         return False
     return True
 
-def Login_Route():
+
+def Read_config():
+    global Link_Static_Route, Application_Static_Route, Connect_Config, Gateway_Total
+
+    Link_Static_Route, Application_Static_Route = [], []
+    Gateway_Total = {'VPN_Link_Common': [], 'VPN_Link_Extra': []}
+    Connect_Config = {}
+    re_ip = '((2[0-4]\d|25[0-5]|[01]?\d\d?).){3}(2[0-4]\d|25[0-5]|[01]?\d\d{0,2})'
+    route_ip = '((2[0-4]\d|25[0-5]|[01]?\d\d?).){3}(2[0-4]\d|25[0-5]|[01]?\d\d?)\s+'
+    re_route = 'ip\s+route\s+%s%sname\s+\S+' % (route_ip, route_ip)
+    prog = re.compile(re_ip)
+    re_route_compile = re.compile(re_route)
+
+    config = configparser.ConfigParser()        # 创建对象
+    config.optionxform = str                    # 保持大小写
+    try:
+        config.read("config.ini", encoding='utf-8')
+        all_sections = config.sections()            # 获取所有段落字符串
+        for sections in all_sections:
+            options = config.options(sections)       # 获取sections段落的所有选项字符串
+            for x in options:                       # x 每个选项
+                value = config.get(sections, x)
+                if sections == 'VPN_Static_Route' or sections == 'Application_Static_Route':
+                    route = re_route_compile.match(value)
+                    if route:
+                        value = route.group()
+                        if sections == 'VPN_Static_Route':
+                            Link_Static_Route.append([value[:value.index('name')].strip(), value[value.index('name'):].strip()])
+                        else:
+                            Application_Static_Route.append([value[:value.index('name')].strip(), value[value.index('name'):].strip()])
+                elif sections == 'Gateway_Config':
+                    ip_str = config.get(sections, x)
+                    for xx in prog.finditer(ip_str):        # 正则匹配所有IP
+                        Gateway_Total[x].append(xx.group().strip())
+                        if x == 'VPN_Link_Extra':
+                            Gateway_Total['VPN_Link_Common'].append(xx.group().strip())
+                elif sections == 'Connect_Config':
+                    Connect_Config[x] = config.get(sections, x)
+    except Exception as err:
+        gui_text.insert('end', Dividing + '读取配置文件出现错误!\n' + str(err))
+        return False
+    else:
+        Connect_Config['Login_pwd'] = Decrypt(Connect_Config['Login_pwd'])
+        Connect_Config['Privileged_pwd'] = Decrypt(Connect_Config['Privileged_pwd'])
+        return True
+
+
+def Login_Route(Connect_Config):
     '检测网关通路 连接到目标， 成功则返回show run'
-    ping = subprocess.call("ping -n 2 -w 1 %s" % Gateway, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    ping = subprocess.call("ping -n 2 -w 1 %s" % Connect_Config['Route'], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if ping == 1:
         gui_text.insert('end', '无法连接到网关，请检查你的本地网络连接是否正常！\n')
         gui_text.see('end')
         return None, None, False
-    switch = ciscolib.Device(Gateway, "%s" % Login_pwd)
+    switch = ciscolib.Device(Connect_Config['Route'], "%s" % Connect_Config['Login_pwd'])
     try:
         switch.connect()
     except Exception as err:
@@ -80,7 +129,7 @@ def Login_Route():
         gui_text.see('end')
     else:
         try:
-            switch.enable("%s" % Privileged_pwd)
+            switch.enable("%s" % Connect_Config['Privileged_pwd'])
         except Exception as err:
             gui_text.insert('end', Dividing + '未能成功登录特权模式！\nError Code:' + str(err))
         else:
@@ -116,7 +165,7 @@ def Line_Detction(sh_run, *args):
             if line[0] in sh_run:
                 a = sh_run.index(line[0]) + len(line[0]) + 1
                 b = a + sh_run[a:].index(' ' or '\n')
-                c = sh_run[a:b]
+                c = sh_run[a:b].strip()
                 # [name,gw,ip route]
                 if x:
                     Vpn_result.append([line[0], c, line[-1]])
@@ -135,20 +184,20 @@ def Link_Group(line_status):
     No_Online = {}
     line_common = {}
     # line_extra = {}
-    for x in VPN_Link_Common:
+    for x in Gateway_Total['VPN_Link_Common']:
         line_common[x] = [[], []]
     # for x in VPN_Link_Extra:
     #     line_extra[x] = [[], []]
     count = 0
     for group in line_status:
         for line in group:
-            if line[1] in VPN_Link_Common:
+            if line[1] in Gateway_Total['VPN_Link_Common']:
                 line_common[line[1]][count].append([line[0], line[1], line[-1]])
             # elif line[1] in VPN_Link_Extra:
             #     line_extra[line[1]][count].append([line[0], line[-1]])
             else:
                 No_Online[line[1]] = [line[0], line[1], line[-1]]
-                print('%s 当前不存在！' % line[0])
+                print('%s 未能与Gateway_Config匹配！' % line[0])
         count = 1
     return line_common, No_Online
 
@@ -279,7 +328,7 @@ def Input_Command(*args, message=None):
     '组合参数'
     re = {}
     if args[0] < 3:
-        for x in VPN_Link_Extra:
+        for x in Gateway_Total['VPN_Link_Extra']:
             re[x] = tkinter.messagebox.askyesnocancel(title='额外选项', message='是否包含线路%s上的%s ?' % (x, message))
             if re[x] is None:
                 return None
@@ -340,35 +389,34 @@ def Again_Login():
 
 def Again_Read_Configure():
     '重新读取配置并重新登录目标'
-    global Line_Status, Line_Set, No_Online, Gateway, switch_config_t, sh_run
+    global Line_Status, Line_Set, No_Online, Connect_Config, switch_config_t, sh_run
     gui_text.insert('end', Dividing)
     try:
         switch_config_t.disconnect()
     except:
         pass
-    try:
-        Input_Config()                                                                          # 读取配置
+    if Read_config():
         gui_text.insert('end', '尝试重新登录目标...\n')
-        sh_run, switch_config_t, status = Login_Route()                                           # 连接目标
+        sh_run, switch_config_t, status = Login_Route(Connect_Config)                                           # 连接目标
         if status:
             Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)        # 刷新线路状态信息
-            Line_Set, No_Online = Link_Group(Line_Status)                                   # 刷新变量
+            Line_Set, No_Online = Link_Group(Line_Status)                                           # 刷新变量
             Flush_Route_Status(switch_config_t)                                                     # 刷新路由show run
             Gui_Line_Switch_Menu()                                                                  # 刷新菜单
             Gui_Button_Panel(Panel_Status)                                                          # 尝试生成面板
         else:
             gui_text.insert('end', '\n登录失败 :(')
-    except BaseException as err:
-        gui_text.insert('end', Dividing + '出现错误:\n' + str(err))
-    else:
-        if status:
-            gui_text.insert('end', Dividing + '已重新载入！\n')
-    finally:
+    # except BaseException as err:
+    #     gui_text.insert('end', Dividing + '出现错误:\n' + str(err))
+    # else:
+    #     if status:
+    #         gui_text.insert('end', Dividing + '已重新载入！\n')
+    # finally:
         gui_text.see('end')
 
 def Decrypt(text):
         '''解密登录密码'''
-        text = text[2:-1]
+        text = text[3:-2]
         textbyt = str.encode(text)
         decodestr = base64.b64decode(textbyt)
         pw_byt = decodestr[28:]
@@ -453,9 +501,9 @@ class Gui_ChangePassword(tkinter.Frame):
                 fileopen = open('Config.ini', 'w', encoding='utf-8')
                 for x in files:
                     if 'Login_pwd' in x and self.login_re.get() != '':
-                        files[files.index(x)] = 'Login_pwd=%s\n' % str(self.en_login_save)
+                        files[files.index(x)] = 'Login_pwd=[%s]\n' % str(self.en_login_save)
                     if 'Privileged_pwd' in x and self.Privileged_pwd_re.get() != '':
-                        files[files.index(x)] = 'Privileged_pwd=%s\n' % str(self.enprivileged_save)
+                        files[files.index(x)] = 'Privileged_pwd=[%s]\n' % str(self.enprivileged_save)
                 fileopen.writelines(files)
                 gui_text.insert('end', Dividing + '已修改！\n')
             except BaseException as err:
@@ -503,87 +551,87 @@ def Gui_Line_Switch_Menu(*args):
     global line_switch
     global x_to_x_dict
     if line_switch:
-        pass
+        line_switch.delete(0, 'end')
     else:
         line_switch = tkinter.Menu(Menu_bar, tearoff=0, font=ch_font)
         Menu_bar.add_cascade(label='线路切换', menu=line_switch)
         # line_switch.add_command(label='全体对象切换到X')
-        all_object_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
-        line_switch.add_cascade(label='全体对象切换到X', menu=all_object_menu, font=ch_font)
+    all_object_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
+    line_switch.add_cascade(label='全体对象切换到X', menu=all_object_menu, font=ch_font)
 
-        all_vpn_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
-        line_switch.add_cascade(label='全体VPN切换到X', menu=all_vpn_menu, font=ch_font)
+    all_vpn_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
+    line_switch.add_cascade(label='全体VPN切换到X', menu=all_vpn_menu, font=ch_font)
 
-        all_app_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
-        line_switch.add_cascade(label='全体APP切换到X', menu=all_app_menu, font=ch_font)
+    all_app_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
+    line_switch.add_cascade(label='全体APP切换到X', menu=all_app_menu, font=ch_font)
 
-        for x in VPN_Link_Common:
-            # x = x
-            if x in VPN_Link_Extra:
+    for x in Gateway_Total['VPN_Link_Common']:
+        # x = x
+        if x in Gateway_Total['VPN_Link_Extra']:
+            continue
+        all_object_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(1, x, None, None, message='对象'))
+        # （type,target,None, message)
+        all_vpn_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(2, 0, x, None, message='VPN线路'))
+        all_app_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(2, 1, x, None,  message='APP线路'))
+    line_switch.add_separator()
+
+# -----------------------------------------------------------------------------------------------------
+    line_to_x_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font, bg='#d2d2d2')
+    line_switch.add_cascade(label='位于线路X的VPN/APP切换到Y', menu=line_to_x_menu, font=ch_font)
+    for_line_menu = {}
+    for_line_menu_vpn = {}
+    for_line_menu_app = {}
+    for_line_menu_all = {}
+    for x in Gateway_Total['VPN_Link_Common']:
+        # x = x
+        for_line_menu[x] = tkinter.Menu(line_to_x_menu, tearoff=0, font=ch_font, bg='#b1b1b1')
+        line_to_x_menu.add_cascade(label='位于线路%s' % x, menu=for_line_menu[x], font=ch_font)
+
+        for_line_menu_vpn[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
+        for_line_menu[x].add_cascade(label='的VPN', menu=for_line_menu_vpn[x], font=ch_font)
+
+        for_line_menu_app[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
+        for_line_menu[x].add_cascade(label='的APP', menu=for_line_menu_app[x], font=ch_font)
+
+        for_line_menu_all[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
+        for_line_menu[x].add_cascade(label='的所有路由', menu=for_line_menu_all[x], font=ch_font)
+
+        for y in Gateway_Total['VPN_Link_Common']:
+            # 生成切换到X.X.X.X ，如果已经处于X线路就跳过生成X的菜单，同时排除VPN_Link_Extra
+            if x == y or y in Gateway_Total['VPN_Link_Extra']:
                 continue
-            all_object_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(1, x, None, None, message='对象'))
-            # （type,target,None, message)
-            all_vpn_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(2, 0, x, None, message='VPN线路'))
-            all_app_menu.add_command(label='%s网关' % x, command=lambda x=x: Input_Command(2, 1, x, None,  message='APP线路'))
-        line_switch.add_separator()
-
-    # -----------------------------------------------------------------------------------------------------
-        line_to_x_menu = tkinter.Menu(line_switch, tearoff=0, font=ch_font, bg='#d2d2d2')
-        line_switch.add_cascade(label='位于线路X的VPN/APP切换到Y', menu=line_to_x_menu, font=ch_font)
-        for_line_menu = {}
-        for_line_menu_vpn = {}
-        for_line_menu_app = {}
-        for_line_menu_all = {}
-        for x in VPN_Link_Common:
-            # x = x
-            for_line_menu[x] = tkinter.Menu(line_to_x_menu, tearoff=0, font=ch_font, bg='#b1b1b1')
-            line_to_x_menu.add_cascade(label='位于线路%s' % x, menu=for_line_menu[x], font=ch_font)
-
-            for_line_menu_vpn[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
-            for_line_menu[x].add_cascade(label='的VPN', menu=for_line_menu_vpn[x], font=ch_font)
-
-            for_line_menu_app[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
-            for_line_menu[x].add_cascade(label='的APP', menu=for_line_menu_app[x], font=ch_font)
-
-            for_line_menu_all[x] = tkinter.Menu(for_line_menu[x], tearoff=0, font=ch_font, bg='#4b4b4b', fg='#e1e2e2')
-            for_line_menu[x].add_cascade(label='的所有路由', menu=for_line_menu_all[x], font=ch_font)
-
-            for y in VPN_Link_Common:
-                # 生成切换到X.X.X.X ，如果已经处于X线路就跳过生成X的菜单，同时排除VPN_Link_Extra
-                if x == y or y in VPN_Link_Extra:
-                    continue
-                # 将位于241的VPN路由切换到242                                                （type,sources, type, target)
-                for_line_menu_vpn[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 0, y))
-                # 将位于241的app路由切换到242
-                for_line_menu_app[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 1, y))
-                # 将位于241的所有路由切换到242
-                for_line_menu_all[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 2, y))
-        line_switch.add_separator()
+            # 将位于241的VPN路由切换到242                                                （type,sources, type, target)
+            for_line_menu_vpn[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 0, y))
+            # 将位于241的app路由切换到242
+            for_line_menu_app[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 1, y))
+            # 将位于241的所有路由切换到242
+            for_line_menu_all[x].add_command(label='切换到%s' % y, command=lambda x=x, y=y: Input_Command(3, x, 2, y))
+    line_switch.add_separator()
 
     # --------------------------------------------------------------------------------------------------
-        x_to_x = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
-        line_switch.add_cascade(label='将X路由切换到线路Y', menu=x_to_x, font=ch_font)
-
+    x_to_x = tkinter.Menu(line_switch, tearoff=0, font=ch_font)
+    line_switch.add_cascade(label='将X路由切换到线路Y', menu=x_to_x, font=ch_font)
     separator = True
     if x_to_x_dict:
         for y in x_to_x_dict.items():
             y[1].delete('0', 'end')
-            gui_text.insert('end', Dividing + '菜单已刷新！\n')
-            gui_text.see('end')
+
+        gui_text.insert('end', Dividing + '菜单已刷新！\n')
+        gui_text.see('end')
 
     for x in Line_Status:
         for xx in x:
             temp_name = xx[-1][5:]
             x_to_x_dict[temp_name] = tkinter.Menu(x_to_x, tearoff=0, font=ch_font)
             x_to_x.add_cascade(label=temp_name, menu=x_to_x_dict[temp_name], font=ch_font)
-            if xx[1] in VPN_Link_Common:strs = '切换到'
+            if xx[1] in Gateway_Total['VPN_Link_Common']:strs = '切换到'
             else:strs = '添加到'
-            for x2 in VPN_Link_Common:
+            for x2 in Gateway_Total['VPN_Link_Common']:
                 if xx[1] != x2:
                     x_to_x_dict[temp_name].add_command(label='%s%s' % (strs, x2), command=lambda x2=x2, xx=xx, x=x:
                     Input_Command(4, Line_Status.index(x), x.index(xx), x2))
                     # (type, index[1], index[index[1]], target)
-            if xx[1] in VPN_Link_Common:
+            if xx[1] in Gateway_Total['VPN_Link_Common']:
                 x_to_x_dict[temp_name].add_command(label='从路由表删除', command=lambda x=x, xx=xx: Input_Command(4, Line_Status.index(x), x.index(xx), None))
         if separator:
             x_to_x.add_separator()
@@ -609,7 +657,7 @@ def Gui_Button_Panel(Status):
         tkinter.Button(OptionsMenu, text='清空输出信息', width=17, command=Clear_Text).grid(row=2, column=0,  **grid)
         tkinter.Button(OptionsMenu, text='登出路由并离开', width=17, command=Exit_Switch).grid(row=2, column=1,  **grid)
         tkinter.Button(OptionsMenu, text='执行命令！', command=Run_Command, width=17, bg='#87CEEB').grid(row=2, column=2,  **grid)
-        # tkinter.Button(OptionsMenu, text='读取配置文件', width=17=23, command=Input_Config).grid(row=2, column=0, padx=1, pady=2)
+        # tkinter.Button(OptionsMenu, text='读取配置文件', width=17=23, command=Read_config).grid(row=2, column=0, padx=1, pady=2)
     return False
 
 
@@ -712,9 +760,9 @@ if __name__ == '__main__':
     gui_text = Gui_Text_Frame()                                                             # 生成log框
     Menu_bar = Gui_Menu_Bar()                                                               # 生成菜单栏
     Gui_System_Menu()                                                                       # 生成系统菜单
-    if Input_Config():
+    if Read_config():
         if Detect_Localip():                                                                # 检查本机IP与授权
-            sh_run, switch_config_t, link = Login_Route()                                   # 登录目标
+            sh_run, switch_config_t, link = Login_Route(Connect_Config)                                   # 登录目标
             if link:
                 Line_Status = Line_Detction(sh_run, Link_Static_Route, Application_Static_Route)
                 Line_Set, No_Online = Link_Group(Line_Status)
