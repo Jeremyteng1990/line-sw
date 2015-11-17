@@ -114,6 +114,8 @@ def read_config():
 
 def login_route(connect_config):
     '检测网关通路 连接到目标， 成功则返回show run'
+    if connect_config['Route'] is None:
+        gui_change_password()
     ping = subprocess.call("ping -n 2 -w 1 %s" % connect_config['Route'], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if ping == 1:
         gui_text.insert('end', '无法连接到网关，请检查你的本地网络连接是否正常！\n')
@@ -193,7 +195,7 @@ def link_group(line_status):
                 line_common[line[1]][count].append([line[0], line[1], line[-1]])
             else:
                 no_online[line[1]] = [line[0], line[1], line[-1]]
-                print('路由 %s 未能与Gateway_Config下的IP匹配！' % line[0])
+                print('路由 %s 未能与Gateway_Config下的IP匹配,表示路由器没有运行这条路由' % line[0])
         count = 1
     return line_common, no_online
 
@@ -418,12 +420,6 @@ def again_read_configure():
             gui_button_panel(Panel_Status)                                                          # 尝试生成面板
         else:
             gui_text.insert('end', '\n登录失败 :(')
-    # except BaseException as err:
-    #     gui_text.insert('end', Dividing + '出现错误:\n' + str(err))
-    # else:
-    #     if status:
-    #         gui_text.insert('end', Dividing + '已重新载入！\n')
-    # finally:
         gui_text.see('end')
 
 
@@ -441,8 +437,10 @@ def decrypt(text):
 
 class gui_change_password(tkinter.Frame):
     '绘制修改密码框'
-    def __init__(self, master=None):
+    def __init__(self, master):
         tkinter.Frame.__init__(self, master)
+        self.master = tkinter.Tk()
+        self.master.geometry('300x200+%d+%d' % (screensize[0]//2 - 150, screensize[1]//2 - 100))
         self.pack()
         self.Login_pwd = tkinter.Entry(self, show='*')
         self.Login_pwd.grid(row=0, column=1, pady=3)
