@@ -23,7 +23,7 @@ Cmd = [[], []]              # 当前缓存命令
 now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 line_switch = None
 x_to_x_dict = {}
-Dividing = '\n\n' + '--*--' * 13 + '\n\n'
+Dividing = '\n' + '--*--' * 13 + '\n\n'
 
 
 def input_config():
@@ -105,6 +105,7 @@ def read_config():
                     Connect_Config[x] = config.get(sections, x)
     except Exception as err:
         gui_text.insert('end', Dividing + '读取配置文件出现错误!\n' + str(err))
+        gui_text.see('end')
         return False
     else:
         Connect_Config['Login_pwd'] = decrypt(Connect_Config['Login_pwd'])
@@ -153,7 +154,9 @@ def detect_local_ip():
         elif '192.168.5' in ip or '10.8.' in ip or '192.168.10' in ip:
             return ip
         else:
-            gui_text.insert('end', Dividing + '您的主机没有被授权使用本软件,无法继续操作！\n如在内网连接了VPN请先断开再试！\n')
+            gui_text.insert('end', Dividing + '您的主机没有被授权使用本软件,无法继续操作！\n\n请检查如下操作:\n'
+                                              '1.在内网连接了VPN请先断开再试！\n2.检查是否有虚拟网卡\n'
+                                              '\n授权的网段：深圳ISH 5网段与深圳服务器网段')
             return False
 
 
@@ -341,7 +344,7 @@ def show_status():
     gui_text.insert('end', Dividing)
     for x in Line_Status:
         for xx in x:
-            gui_text.insert('end', " %-35s链路接口为%18s" % (xx[-1][5:], xx[1]) + '\n' + '-' * 65 + '\n')
+            gui_text.insert('end', " %-40s链路接口为%14s" % (xx[-1][5:], xx[1]) + '\n' + '-' * 65 + '\n')
     # tab.focus_force() 光标移动至末尾
     gui_text.see('end')          # 滚动条滚动到末尾
 
@@ -439,8 +442,8 @@ class gui_change_password(tkinter.Frame):
     '绘制修改密码框'
     def __init__(self, master):
         tkinter.Frame.__init__(self, master)
-        self.master = tkinter.Tk()
-        self.master.geometry('300x200+%d+%d' % (screensize[0]//2 - 150, screensize[1]//2 - 100))
+
+        # self.master.geometry('300x200+%d+%d' % (screensize[0]//2 - 150, screensize[1]//2 - 100))
         self.pack()
         self.Login_pwd = tkinter.Entry(self, show='*')
         self.Login_pwd.grid(row=0, column=1, pady=3)
@@ -738,11 +741,11 @@ def gui_help_menu():
         # about_text.pack()
         # about_text.insert('end', '\n\n\n            Fast Switch Route\n      一个用Python和Tkinter写的小工具')
         tkinter.Label(about_text_frame, text='\nFast Route Switch', fg='#fffafa', bg='#696969', font=('Helvetica', 15, 'bold')).pack(anchor='nw')
-        tkinter.Label(about_text_frame, text='V0.1 ISH专用', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack(anchor='nw')
+        tkinter.Label(about_text_frame, text='V0.2 ISH专用', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 9)).pack(anchor='nw')
         tkinter.Label(about_text_frame, text='\n一个用Python和Tkinter写的Cisco路由表切换工具\n'
                                              '如遇到bug或异常请发送邮件给作者.', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='w')
         tkinter.Label(about_text_frame, text='%s' % '\n'*6, fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
-        tkinter.Label(about_text_frame, text='build:2015-10-20 16:40:59', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
+        tkinter.Label(about_text_frame, text='build:2015-11-24 15:26:50', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
         tkinter.Label(about_text_frame, text='Developer:Sonny Yang', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
         tkinter.Label(about_text_frame, text='Email:klzsysy@live.com; it_yangsy@ish.com.cn', fg='#fffafa', bg='#696969', font=('Microsoft YaHei', 8)).pack(anchor='sw')
 
@@ -760,7 +763,7 @@ def gui_help_menu():
         readme_text.insert('end', '\n全体VPN是指在配置文件中<VPN_Static_Route>所对应的所有路由,\n\n全体APP指的是配置文件中<Application_Static_Route>所有对应的路由.\n')
         readme_text.insert('end', '\n所有路由操作只有在点击执行命令之后才会实际操作路由器.\n\n修改连接密码是指本工具连接到路由的密码，而非修改路由器的密码.\n')
         readme_text.insert('end', '\n菜单中的<将X路由切换到线路Y>适用于操作单条路由表,菜单会在执行命令后自动刷新\n')
-        readme_text.insert('end', '\n菜单中的网关可根据需要自行在配置文件中的[Gateway_Config]对应参数中添加')
+        readme_text.insert('end', '\n菜单中的网关或路由条目可根据需要自行在配置文件中的对应字段中添加')
         tkinter.Button(readme, text='大概看懂了', width=12, command=lambda: readme.destroy()).pack(side='bottom', pady=5)
 
     help_menu.add_command(label='说明', command=readme_frame)
@@ -789,6 +792,7 @@ if __name__ == '__main__':
                 Switch_Menu_Status = gui_line_switch_menu()                                 # 生成链路切换菜单
                 Panel_Status = gui_button_panel(Panel_Status)                               # 生成按钮面板
                 gui_text.insert('end', '\nHello World！\n')
+                # gui_text.insert('end', '%s' % now_time)
             else:
                 gui_text.insert('end', '\n\n连接路由器失败 :(\n')
     gui_help_menu()                                                                         # 生成帮助菜单
